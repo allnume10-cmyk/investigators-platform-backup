@@ -1,0 +1,13 @@
+{
+  "name": "Copy of Brent's Investigative Case Manager",
+  "description": "A comprehensive investigative case management system for legal professionals, featuring AI-powered email processing, activity tracking, voucher reporting, and automated attorney status updates.",
+  "requestFramePermissions": ["microphone"],
+  "platformFiles": [
+    "index.html",
+    "index.tsx",
+    "app.tsx",
+    "types.ts",
+    "supabase.ts",
+    "geminiService.ts"
+  ]
+}
