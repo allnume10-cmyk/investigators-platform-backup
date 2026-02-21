@@ -54,6 +54,8 @@ export interface GlobalTask {
   completed: boolean;
   attorneyName: string;
   caseId: string;
+  /** When true, task came from Communication Hub; user should complete intake info. */
+  needsIntake?: boolean;
 }
 
 export interface EvidenceItem {
@@ -85,9 +87,16 @@ export interface PendingCommunication {
   confidence?: number;
 }
 
+export interface Jurisdiction {
+  id: string;
+  name: string;
+}
+
 export interface Case {
   /** UUID of the assigned investigator */
   assigned_to?: string | null;
+  /** Jurisdiction (area) for the case */
+  jurisdiction_id?: string | null;
 
   id: string;
   caseNumber: string;
@@ -108,4 +117,6 @@ export interface Case {
   activities: Activity[];
   datePaid?: string;
   amountPaid?: number;
+  /** When true, case was created from Communication Hub; user should complete intake details. */
+  needsIntake?: boolean;
 }

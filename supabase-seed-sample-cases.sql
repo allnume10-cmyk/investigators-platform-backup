@@ -1,0 +1,108 @@
+-- Run this in Supabase Dashboard → SQL Editor → New query → Paste & Run
+-- Inserts sample cases so you can test the task intake "last name" search.
+--
+-- If you get "column does not exist": your table may use snake_case. In Table Editor
+-- check the actual column names (e.g. case_number vs "caseNumber") and adjust the
+-- INSERT list to match, or rename columns in this script to match your schema.
+
+INSERT INTO cases (
+  id,
+  "caseNumber",
+  "judgeName",
+  "voucherStatus",
+  status,
+  "dateOpened",
+  "dateClosed",
+  "attorneyName",
+  "defendantFirstName",
+  "defendantLastName",
+  "nextCourtDate",
+  "nextEventDescription",
+  "evidenceItems",
+  "dispositionNotes",
+  activities,
+  "datePaid",
+  "amountPaid",
+  "assigned_to"
+) VALUES
+  (
+    gen_random_uuid(),
+    'REF-2024-001',
+    'Hon. Smith',
+    'Missing',
+    'Open',
+    to_char(CURRENT_DATE - interval '30 days', 'YYYY-MM-DD'),
+    '',
+    'Jane Doe, Esq.',
+    'Maria',
+    'Garcia',
+    to_char(CURRENT_DATE + interval '14 days', 'YYYY-MM-DD'),
+    'Trial Readiness',
+    '[]'::jsonb,
+    '',
+    '[]'::jsonb,
+    '',
+    0,
+    NULL
+  ),
+  (
+    gen_random_uuid(),
+    'REF-2024-002',
+    'Hon. Jones',
+    'Submitted',
+    'Open',
+    to_char(CURRENT_DATE - interval '60 days', 'YYYY-MM-DD'),
+    '',
+    'John Smith, Esq.',
+    'James',
+    'Wilson',
+    to_char(CURRENT_DATE + interval '7 days', 'YYYY-MM-DD'),
+    'Status Conference',
+    '[]'::jsonb,
+    '',
+    '[]'::jsonb,
+    '',
+    0,
+    NULL
+  ),
+  (
+    gen_random_uuid(),
+    'REF-2024-003',
+    'Hon. Lee',
+    'Paid',
+    'Closed',
+    to_char(CURRENT_DATE - interval '90 days', 'YYYY-MM-DD'),
+    to_char(CURRENT_DATE - interval '5 days', 'YYYY-MM-DD'),
+    'Anne Brown, Esq.',
+    'Robert',
+    'Martinez',
+    '',
+    '',
+    '[]'::jsonb,
+    'Case settled.',
+    '[]'::jsonb,
+    to_char(CURRENT_DATE - interval '5 days', 'YYYY-MM-DD'),
+    1250.00,
+    NULL
+  ),
+  (
+    gen_random_uuid(),
+    'REF-2024-004',
+    'Hon. Davis',
+    'Missing',
+    'Open',
+    to_char(CURRENT_DATE - interval '10 days', 'YYYY-MM-DD'),
+    '',
+    'Paul Green, Esq.',
+    'Linda',
+    'Garcia',
+    to_char(CURRENT_DATE + interval '21 days', 'YYYY-MM-DD'),
+    'Preliminary Hearing',
+    '[]'::jsonb,
+    '',
+    '[]'::jsonb,
+    '',
+    0,
+    NULL
+  )
+ON CONFLICT (id) DO NOTHING;

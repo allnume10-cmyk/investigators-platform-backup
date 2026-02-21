@@ -24,7 +24,7 @@ import {
 import { 
   Case, CaseStatus, VoucherStatus, Activity as CaseActivity, ActivityCode,
   GlobalTask, CaseTab, TaskPriority, Communication, EvidenceItem,
-  PendingCommunication
+  PendingCommunication, Jurisdiction
 } from './types';
 import { 
   parseBulkSpreadsheet, parseEmailToCase, draftInvestigativeEmail, processAudioToActivity,
@@ -50,6 +50,7 @@ type TimeframeOption = 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly' | 'All';
 
 const INITIAL_ACTIVITY_CODES: ActivityCode[] = [
   { id: 'in', code: 'IN', label: 'Case Intake', defaultNarrative: 'Reviewed attorney assignment email outlining initial investigative directives and opened case file.', defaultHours: 0.2 },
+  { id: 'ae', code: 'AE', label: 'Attorney Email', defaultNarrative: 'Reviewed attorney email; task added to list.', defaultHours: 0.2 },
   { id: 'new', code: 'NEW', label: 'New Case', defaultNarrative: 'Opened case, reviewed discovery, consulted atty', defaultHours: 0.8 },
   { id: 'su', code: 'SU', label: 'Status Update', defaultNarrative: "researched CourtView, updated case status for attorney's weekly status report.", defaultHours: 0.2 },
   { id: 'cc', code: 'CC', label: 'Closed Case', defaultNarrative: 'Case resolved; finalized all reports and archived investigative file.', defaultHours: 0.2 },
@@ -113,12 +114,14 @@ const mapDbToCase = (c: any, todayStr: string): Case => ({
   nextEventDescription: c.nextEventDescription ?? '',
   attorneyName: c.attorneyName ?? '',
   assigned_to: c.assigned_to ?? null,
+  jurisdiction_id: c.jurisdiction_id ?? null,
   activities: c.activities ?? [],
   evidenceItems: c.evidenceItems ?? [],
-  communications: [], 
+  communications: c.communications ?? [],
   dispositionNotes: c.dispositionNotes ?? '',
   datePaid: c.datePaid ?? '',
-  amountPaid: Number(c.amountPaid ?? 0)
+  amountPaid: Number(c.amountPaid ?? 0),
+  needsIntake: !!c.needs_intake
 });
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -186,9 +189,10 @@ const CaseJacket: React.FC<{
   activityCodes: ActivityCode[];
   tasks: GlobalTask[];
   investigators: InvestigatorProfile[];
+  jurisdictions: Jurisdiction[];
   isAdmin: boolean;
   onUpdateTask?: (task: GlobalTask) => Promise<void>;
-}> = ({ caseData, onClose, onUpdate, activityCodes, tasks, investigators, isAdmin, onUpdateTask }) => {
+}> = ({ caseData, onClose, onUpdate, activityCodes, tasks, investigators, jurisdictions, isAdmin, onUpdateTask }) => {
   const [activeTab, setActiveTab] = useState<CaseTab>('details');
   const [localCase, setLocalCase] = useState<Case>(caseData);
   
@@ -287,6 +291,39 @@ const CaseJacket: React.FC<{
     setNewLog(prev => ({...prev, description: meta?.defaultNarrative || '', hours: (meta?.defaultHours || 0.0).toString()}));
   };
 
+  const updateActivity = (id: string, updates: Partial<CaseActivity>) => {
+    setLocalCase(prev => ({
+      ...prev,
+      activities: (prev.activities || []).map(a => a.id === id ? { ...a, ...updates } : a),
+    }));
+  };
+
+  const copyEmailDraftToClipboard = async () => {
+    const lines: string[] = [
+      `Subject: Case update – ${localCase.defendantLastName}, ${localCase.defendantFirstName} – Ref: ${localCase.caseNumber}`,
+      '',
+      `Dear ${localCase.attorneyName || 'Attorney'},`,
+      '',
+      'Summary of investigative actions for the above matter:',
+      '',
+    ];
+    (localCase.activities || [])
+      .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime())
+      .forEach(a => {
+        lines.push(`• ${displayDate(a.date)} – ${a.code}: ${a.description || '(no narrative)'} (${Number(a.hours || 0).toFixed(1)} hrs)`);
+      });
+    lines.push('');
+    lines.push(`Total billable hours: ${totalHours.toFixed(1)}`);
+    if (localCase.nextCourtDate) lines.push(`Next court date: ${displayDate(localCase.nextCourtDate)}`);
+    const draft = lines.join('\n');
+    try {
+      await navigator.clipboard.writeText(draft);
+      alert('Draft copied to clipboard. Paste into your email to send to the attorney.');
+    } catch {
+      alert('Could not copy to clipboard. Please copy the draft manually.');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-[1000] p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-[40px] shadow-2xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden border border-slate-300 animate-in zoom-in-95">
@@ -304,6 +341,15 @@ const CaseJacket: React.FC<{
           </div>
           <button onClick={onClose} className="p-3 hover:bg-white/10 rounded-2xl transition-all active:scale-95"><X size={28}/></button>
         </header>
+
+        {(localCase as any).needsIntake && (
+          <div className="px-10 py-3 bg-amber-100 border-b border-amber-200 flex items-center justify-between shrink-0">
+            <span className="text-[11px] font-black uppercase tracking-wide text-amber-900">Complete intake information for this case</span>
+            <button onClick={() => { updateCase('needsIntake', false); onUpdate({ ...localCase, needsIntake: false }); }} className="px-4 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-all">
+              Mark intake complete
+            </button>
+          </div>
+        )}
 
         <div className="flex bg-slate-50 border-b shrink-0 px-10">
           {['details', 'logs', 'communication', 'evidence'].map((tab) => (
@@ -325,6 +371,7 @@ const CaseJacket: React.FC<{
                       <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Last Name</p><input value={localCase.defendantLastName} onChange={e => updateCase('defendantLastName', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none"/></div>
                       <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead Attorney</p><input value={localCase.attorneyName} onChange={e => updateCase('attorneyName', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none"/></div>
                       <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Presiding Judge</p><input value={localCase.judgeName} onChange={e => updateCase('judgeName', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
+                      <div className="col-span-2 space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Jurisdiction</p><select value={localCase.jurisdiction_id ?? ''} onChange={e => updateCase('jurisdiction_id', e.target.value || null)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"><option value="">Select area...</option>{jurisdictions.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}</select></div>
                     </div>
                     {isAdmin && (
                       <div className="mt-3">
@@ -384,9 +431,22 @@ const CaseJacket: React.FC<{
                         <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Court Date</p><input type="date" value={localCase.nextCourtDate} onChange={e => updateCase('nextCourtDate', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"/></div>
                         <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Event Description</p><input value={localCase.nextEventDescription} onChange={e => updateCase('nextEventDescription', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" placeholder="e.g. Trial Readiness"/></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Case Status</p><select value={localCase.status} onChange={e => updateCase('status', e.target.value as CaseStatus)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(CaseStatus).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                        <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Voucher Status</p><select value={localCase.voucherStatus} onChange={e => updateCase('voucherStatus', e.target.value as VoucherStatus)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(VoucherStatus).map(vs => <option key={vs} value={vs}>{vs}</option>)}</select></div>
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-[1fr_1fr] gap-6 items-start">
+                          <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Case Status</p><select value={localCase.status} onChange={e => updateCase('status', e.target.value as CaseStatus)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(CaseStatus).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                          {(localCase.status === CaseStatus.CLOSED || String(localCase.status || '').toLowerCase() === 'closed') ? (
+                            <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Closed</p><input type="date" value={localCase.dateClosed ?? ''} onChange={e => updateCase('dateClosed', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
+                          ) : <div />}
+                        </div>
+                        <div className="grid grid-cols-[1fr_1fr] gap-6 items-start">
+                          <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Voucher Status</p><select value={localCase.voucherStatus} onChange={e => updateCase('voucherStatus', e.target.value as VoucherStatus)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(VoucherStatus).map(vs => <option key={vs} value={vs}>{vs}</option>)}</select></div>
+                          {(localCase.voucherStatus === VoucherStatus.PAID || String(localCase.voucherStatus || '').toLowerCase() === 'paid') ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Date Paid</p><input type="date" value={localCase.datePaid ?? ''} onChange={e => updateCase('datePaid', e.target.value)} className="w-full p-2.5 bg-slate-50 border rounded-lg text-xs font-bold outline-none"/></div>
+                              <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Amount Paid</p><input type="number" step="0.01" min="0" value={localCase.amountPaid ?? ''} onChange={e => updateCase('amountPaid', e.target.value ? Number(e.target.value) : 0)} className="w-full p-2.5 bg-slate-50 border rounded-lg text-xs font-bold outline-none" placeholder="0.00"/></div>
+                            </div>
+                          ) : <div />}
+                        </div>
                       </div>
                       <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Strategic Notes</p><textarea value={localCase.dispositionNotes} onChange={e => updateCase('dispositionNotes', e.target.value)} className="w-full p-4 bg-slate-50 border rounded-xl text-xs font-medium h-48 outline-none resize-none focus:border-indigo-600 transition-all" placeholder="Enter notes..."/></div>
                     </div>
@@ -401,7 +461,13 @@ const CaseJacket: React.FC<{
               <div className="bg-slate-900 rounded-[32px] p-8 shadow-2xl relative overflow-hidden shrink-0">
                 <div className="flex justify-between items-center mb-8 relative z-10">
                   <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">Post Investigative Log {isProcessingVoice && <span className="flex items-center gap-2 text-indigo-300 animate-pulse"><Loader2 size={12} className="animate-spin"/> AI Processing...</span>}</h4>
-                  <p className="text-3xl font-black text-white">{totalHours.toFixed(1)} <span className="text-[10px] text-slate-500 uppercase">Total Billable Hrs</span></p>
+                  <div className="flex items-center gap-4">
+                    <button type="button" onClick={copyEmailDraftToClipboard} className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-[10px] uppercase tracking-widest transition-all" title="Copy email draft to clipboard (paste into email to send to attorney)">
+                      <Mail size={18}/>
+                      Draft email
+                    </button>
+                    <p className="text-3xl font-black text-white">{totalHours.toFixed(1)} <span className="text-[10px] text-slate-500 uppercase">Total Billable Hrs</span></p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-12 gap-4 items-end relative z-10">
                   <div className="col-span-2 space-y-1"><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Date</p><input type="date" value={newLog.date} onChange={e => setNewLog({...newLog, date: e.target.value})} className="w-full p-3 bg-white rounded-xl text-[11px] font-bold outline-none"/></div>
@@ -417,18 +483,75 @@ const CaseJacket: React.FC<{
               </div>
               <div className="space-y-4 pb-10">
                 {sortedActivities.map(a => (
-                  <div key={a.id} className="p-5 bg-white border rounded-[24px] flex items-center justify-between group hover:border-indigo-200 transition-all shadow-sm">
-                    <div className="flex gap-6 items-center flex-1">
-                      <div className="text-center w-16">
-                        <span className="text-[10px] font-black text-indigo-600 block uppercase tracking-widest">{a.code}</span>
-                        <span className="text-[10px] font-black text-slate-400">{a.hours.toFixed(1)}H</span>
+                  <div key={a.id} className="p-5 bg-white border rounded-[24px] flex items-start justify-between gap-4 hover:border-indigo-200 transition-all shadow-sm">
+                    <div className="flex gap-4 items-start flex-1 min-w-0">
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Date</label>
+                        <input type="date" value={a.date || ''} onChange={e => updateActivity(a.id, { date: e.target.value })} className="w-32 p-2 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500"/>
                       </div>
-                      <div className="flex-1 border-l-2 border-slate-100 pl-6">
-                        <p className="text-[11px] font-bold text-slate-800 leading-relaxed">{a.description}</p>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{displayDate(a.date)}</p>
+                      <div className="flex flex-col gap-2 shrink-0 w-24">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Type</label>
+                        <select value={a.code} onChange={e => updateActivity(a.id, { code: e.target.value })} className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-black uppercase outline-none focus:border-indigo-500">{activityCodes.map(ac => <option key={ac.id} value={ac.code}>{ac.code}</option>)}</select>
+                      </div>
+                      <div className="flex flex-col gap-2 flex-1 min-w-0">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Narrative</label>
+                        <input value={a.description || ''} onChange={e => updateActivity(a.id, { description: e.target.value })} className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500" placeholder="Enter narrative..."/>
+                      </div>
+                      <div className="flex flex-col gap-2 shrink-0 w-16">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Hrs</label>
+                        <input type="number" step="0.1" min="0" value={a.hours ?? ''} onChange={e => updateActivity(a.id, { hours: parseFloat(e.target.value) || 0 })} className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-black outline-none focus:border-indigo-500"/>
                       </div>
                     </div>
-                    <button onClick={() => updateCase('activities', (localCase.activities || []).filter(x => x.id !== a.id))} className="p-3 text-rose-400 opacity-0 group-hover:opacity-100 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={16}/></button>
+                    <button onClick={() => updateCase('activities', (localCase.activities || []).filter(x => x.id !== a.id))} className="p-3 text-rose-400 hover:bg-rose-50 rounded-xl transition-all shrink-0" title="Remove entry"><Trash2 size={16}/></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'communication' && (
+            <div className="animate-in fade-in space-y-8 h-full">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-100 pb-3 flex items-center gap-3"><MessageSquare size={16} className="text-indigo-600"/> Communications</h3>
+                <button type="button" onClick={() => updateCase('communications', [...(localCase.communications || []), { id: Math.random().toString(36).slice(2), date: todayStr, type: 'Email', content: '', recipient: localCase.attorneyName || '' }])} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-700">Add entry</button>
+              </div>
+              <div className="space-y-4">
+                {(localCase.communications || []).length === 0 ? (
+                  <p className="text-slate-400 text-sm py-8 text-center">No communications logged. Add an entry to track emails, calls, or correspondence.</p>
+                ) : (localCase.communications || []).map(comm => (
+                  <div key={comm.id} className="p-5 bg-slate-50 border rounded-2xl flex flex-col gap-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Date</p><input type="date" value={comm.date || ''} onChange={e => updateCase('communications', (localCase.communications || []).map(x => x.id === comm.id ? { ...x, date: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs"/></div>
+                      <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Type</p><select value={comm.type || 'Email'} onChange={e => updateCase('communications', (localCase.communications || []).map(x => x.id === comm.id ? { ...x, type: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs">{['Email', 'Call', 'Text', 'Letter', 'Other'].map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                      <div className="col-span-2 space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Recipient</p><input value={comm.recipient || ''} onChange={e => updateCase('communications', (localCase.communications || []).map(x => x.id === comm.id ? { ...x, recipient: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs" placeholder="Name or email"/></div>
+                      <div className="col-span-2 space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Content / Summary</p><textarea value={comm.content || ''} onChange={e => updateCase('communications', (localCase.communications || []).map(x => x.id === comm.id ? { ...x, content: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs min-h-[80px]" placeholder="Summary or notes"/></div>
+                    </div>
+                    <button type="button" onClick={() => updateCase('communications', (localCase.communications || []).filter(x => x.id !== comm.id))} className="self-end p-2 text-rose-500 hover:bg-rose-50 rounded-lg text-[10px] font-bold">Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'evidence' && (
+            <div className="animate-in fade-in space-y-8 h-full">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-100 pb-3 flex items-center gap-3"><FileSearch size={16} className="text-indigo-600"/> Evidence</h3>
+                <button type="button" onClick={() => updateCase('evidenceItems', [...(localCase.evidenceItems || []), { id: Math.random().toString(36).slice(2), description: '', dateRequested: todayStr, requestedFrom: '', dateReceived: '', notes: '' }])} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-700">Add item</button>
+              </div>
+              <div className="space-y-4">
+                {(localCase.evidenceItems || []).length === 0 ? (
+                  <p className="text-slate-400 text-sm py-8 text-center">No evidence items. Add requests and track receipt.</p>
+                ) : (localCase.evidenceItems || []).map(ev => (
+                  <div key={ev.id} className="p-5 bg-slate-50 border rounded-2xl flex flex-col gap-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2 space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Description</p><input value={ev.description || ''} onChange={e => updateCase('evidenceItems', (localCase.evidenceItems || []).map(x => x.id === ev.id ? { ...x, description: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs" placeholder="What was requested"/></div>
+                      <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Date requested</p><input type="date" value={ev.dateRequested || ''} onChange={e => updateCase('evidenceItems', (localCase.evidenceItems || []).map(x => x.id === ev.id ? { ...x, dateRequested: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs"/></div>
+                      <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Requested from</p><input value={ev.requestedFrom || ''} onChange={e => updateCase('evidenceItems', (localCase.evidenceItems || []).map(x => x.id === ev.id ? { ...x, requestedFrom: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs" placeholder="Agency or party"/></div>
+                      <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Date received</p><input type="date" value={ev.dateReceived || ''} onChange={e => updateCase('evidenceItems', (localCase.evidenceItems || []).map(x => x.id === ev.id ? { ...x, dateReceived: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs"/></div>
+                      <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase">Notes</p><input value={ev.notes || ''} onChange={e => updateCase('evidenceItems', (localCase.evidenceItems || []).map(x => x.id === ev.id ? { ...x, notes: e.target.value } : x))} className="w-full p-2 border rounded-lg text-xs" placeholder="Optional"/></div>
+                    </div>
+                    <button type="button" onClick={() => updateCase('evidenceItems', (localCase.evidenceItems || []).filter(x => x.id !== ev.id))} className="self-end p-2 text-rose-500 hover:bg-rose-50 rounded-lg text-[10px] font-bold">Remove</button>
                   </div>
                 ))}
               </div>
@@ -452,8 +575,9 @@ const AppShell: React.FC = () => {
 
   const [dbCases, setDbCases] = useState<Case[]>([]);
   const [investigators, setInvestigators] = useState<InvestigatorProfile[]>([]);
+  const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
   const [myRole, setMyRole] = useState<string | null>(null);
-  const isAdmin = myRole === 'global_admin';
+  const isAdmin = myRole === 'global_admin' || myRole === 'admin' || myRole === 'ADMIN';
 
   const [showProfile, setShowProfile] = useState(false);
 const [profileName, setProfileName] = useState('');
@@ -490,6 +614,16 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [intakeText, setIntakeText] = useState('');
   const [isIntaking, setIsIntaking] = useState(false);
 
+  // Communication Hub State
+  const [commHubSubject, setCommHubSubject] = useState('');
+  const [commHubBody, setCommHubBody] = useState('');
+  const [commHubSender, setCommHubSender] = useState('');
+  const [commHubDate, setCommHubDate] = useState(todayStr);
+  const [commHubSuggestion, setCommHubSuggestion] = useState<{ suggestedCaseId: string | null; reasoning: string; confidence: number } | null>(null);
+  const [commHubSelectedCaseId, setCommHubSelectedCaseId] = useState<string | null>(null);
+  const [commHubLoading, setCommHubLoading] = useState(false);
+  const [commHubAccepting, setCommHubAccepting] = useState(false);
+
   // Report Hub State
   const [selectedAttorneyFilter, setSelectedAttorneyFilter] = useState<string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string>('weekly');
@@ -500,13 +634,23 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [taskFilter, setTaskFilter] = useState<'Active' | 'Completed'>('Active');
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [newTask, setNewTask] = useState({
+  const [newTask, setNewTask] = useState<{
+    defendantName: string; attorneyName: string; taskDescription: string; dueDate: string; priority: TaskPriority; caseId: string; caseNumber: string; needsIntake?: boolean;
+  }>({
     defendantName: '',
+    attorneyName: '',
     taskDescription: '',
     dueDate: todayStr,
-    priority: 'Medium' as TaskPriority,
-    caseId: ''
+    priority: 'Medium',
+    caseId: '',
+    caseNumber: ''
   });
+  const [caseSearchQuery, setCaseSearchQuery] = useState('');
+  const caseSearchMatches = useMemo(() => {
+    const q = caseSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return dbCases.filter(c => (c.defendantLastName || '').toLowerCase().includes(q));
+  }, [dbCases, caseSearchQuery]);
 
   // Calendar State
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -538,14 +682,17 @@ const [savingProfile, setSavingProfile] = useState(false);
         id: t.id,
         taskDate: t.taskDate || '',
         defendantName: t.defendantName || '',
-        attorneyName: '', 
+        attorneyName: t.attorneyName || '',
         caseNumber: t.caseNumber || '',
         taskDescription: t.taskDescription || '',
         dueDate: t.dueDate || '',
         priority: (t.priority || 'Medium') as TaskPriority,
         completed: !!t.completed,
-        caseId: t.caseId
+        caseId: t.caseId,
+        needsIntake: !!t.needs_intake
       })));
+      const { data: jData } = await supabase.from('jurisdictions').select('id, name').order('name');
+      if (jData?.length) setJurisdictions(jData as Jurisdiction[]);
       setLastSync(new Date());
     } catch (err: any) { 
       console.error("Cloud Fetch Error:", err);
@@ -714,6 +861,9 @@ const [savingProfile, setSavingProfile] = useState(false);
 
   const sortedGlobalTasks = useMemo(() => {
     return [...globalTasks].sort((a, b) => {
+      const aNeed = (a as any).needsIntake ? 1 : 0;
+      const bNeed = (b as any).needsIntake ? 1 : 0;
+      if (bNeed !== aNeed) return bNeed - aNeed;
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
@@ -728,19 +878,22 @@ const [savingProfile, setSavingProfile] = useState(false);
         dateOpened, dateClosed, attorneyName, defendantFirstName,
         defendantLastName, nextCourtDate, nextEventDescription,
         evidenceItems, dispositionNotes, activities, datePaid, amountPaid,
-        assigned_to
+        assigned_to, jurisdiction_id, communications, needsIntake
       } = c;
 
       const payload = {
         id, caseNumber, judgeName, voucherStatus, status,
         dateOpened, dateClosed, attorneyName, defendantFirstName,
         defendantLastName, nextCourtDate, nextEventDescription,
-        evidenceItems: evidenceItems || [], 
-        dispositionNotes: dispositionNotes || '', 
-        activities: activities || [], 
+        evidenceItems: evidenceItems || [],
+        communications: communications || [],
+        dispositionNotes: dispositionNotes || '',
+        activities: activities || [],
         datePaid: datePaid || '',
         amountPaid: Number(amountPaid || 0),
-        assigned_to: c.assigned_to ?? null
+        assigned_to: c.assigned_to ?? null,
+        jurisdiction_id: jurisdiction_id ?? null,
+        needs_intake: !!needsIntake
       };
 
       const { error } = await supabase.from('cases').upsert(payload);
@@ -758,8 +911,8 @@ const [savingProfile, setSavingProfile] = useState(false);
   const persistTask = async (t: any) => {
     setIsProcessing(true);
     try {
-      const { id, taskDate, defendantName, caseNumber, taskDescription, dueDate, priority, completed, caseId } = t;
-      const payload = { id, taskDate, defendantName, caseNumber, taskDescription, dueDate, priority, completed, caseId };
+      const { id, taskDate, defendantName, attorneyName, caseNumber, taskDescription, dueDate, priority, completed, caseId, needsIntake } = t;
+      const payload = { id, taskDate, defendantName, attorneyName: attorneyName || '', caseNumber, taskDescription, dueDate, priority, completed, caseId, needs_intake: !!needsIntake };
 
       const { error } = await supabase.from('global_tasks').upsert(payload);
       if (error) throw error;
@@ -778,10 +931,30 @@ const [savingProfile, setSavingProfile] = useState(false);
       id: newId, caseNumber: '', judgeName: '', voucherStatus: VoucherStatus.MISSING, status: CaseStatus.OPEN, 
       dateOpened: todayStr, attorneyName: '', defendantFirstName: '', defendantLastName: 'NEW CASE', 
       nextCourtDate: '', nextEventDescription: '', evidenceItems: [], activities: [], communications: [], 
-      dispositionNotes: '', amountPaid: 0, datePaid: '' 
+      dispositionNotes: '', amountPaid: 0, datePaid: '', jurisdiction_id: jurisdictions[0]?.id ?? null
     };
     setSelectedCaseId(newId);
     setDbCases(prev => [newCase, ...prev]);
+  };
+
+  const seedSampleCases = async () => {
+    const d = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+    const samples: Case[] = [
+      { id: crypto.randomUUID(), caseNumber: 'REF-2024-001', judgeName: 'Hon. Smith', voucherStatus: VoucherStatus.MISSING, status: CaseStatus.OPEN, dateOpened: d(-30), dateClosed: '', attorneyName: 'Jane Doe, Esq.', defendantFirstName: 'Maria', defendantLastName: 'Garcia', nextCourtDate: d(14), nextEventDescription: 'Trial Readiness', evidenceItems: [], activities: [], communications: [], dispositionNotes: '', datePaid: '', amountPaid: 0, assigned_to: null },
+      { id: crypto.randomUUID(), caseNumber: 'REF-2024-002', judgeName: 'Hon. Jones', voucherStatus: VoucherStatus.SUBMITTED, status: CaseStatus.OPEN, dateOpened: d(-60), dateClosed: '', attorneyName: 'John Smith, Esq.', defendantFirstName: 'James', defendantLastName: 'Wilson', nextCourtDate: d(7), nextEventDescription: 'Status Conference', evidenceItems: [], activities: [], communications: [], dispositionNotes: '', datePaid: '', amountPaid: 0, assigned_to: null },
+      { id: crypto.randomUUID(), caseNumber: 'REF-2024-003', judgeName: 'Hon. Lee', voucherStatus: VoucherStatus.PAID, status: CaseStatus.CLOSED, dateOpened: d(-90), dateClosed: d(-5), attorneyName: 'Anne Brown, Esq.', defendantFirstName: 'Robert', defendantLastName: 'Martinez', nextCourtDate: '', nextEventDescription: '', evidenceItems: [], activities: [], communications: [], dispositionNotes: 'Case settled.', datePaid: d(-5), amountPaid: 1250, assigned_to: null },
+      { id: crypto.randomUUID(), caseNumber: 'REF-2024-004', judgeName: 'Hon. Davis', voucherStatus: VoucherStatus.MISSING, status: CaseStatus.OPEN, dateOpened: d(-10), dateClosed: '', attorneyName: 'Paul Green, Esq.', defendantFirstName: 'Linda', defendantLastName: 'Garcia', nextCourtDate: d(21), nextEventDescription: 'Preliminary Hearing', evidenceItems: [], activities: [], communications: [], dispositionNotes: '', datePaid: '', amountPaid: 0, assigned_to: null },
+    ];
+    setIsProcessing(true);
+    try {
+      for (const c of samples) await persistCase(c);
+      await fetchAll();
+      alert('Added 4 sample cases (Garcia, Wilson, Martinez, Garcia). Try the task intake last-name search.');
+    } catch (err: any) {
+      alert(`Seed failed: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const saveMyProfile = async () => {
@@ -828,7 +1001,8 @@ const [savingProfile, setSavingProfile] = useState(false);
           activities: [{ id: 'init', caseId: newId, code: 'IN', description: 'Initial AI Intake processing complete.', hours: 0.2, date: todayStr }],
           communications: [],
           dispositionNotes: '',
-          amountPaid: 0
+          amountPaid: 0,
+          jurisdiction_id: jurisdictions[0]?.id ?? null
         };
         await persistCase(intakeCase);
         setIntakeText('');
@@ -839,6 +1013,124 @@ const [savingProfile, setSavingProfile] = useState(false);
       alert("Intake analysis failed.");
     } finally {
       setIsIntaking(false);
+    }
+  };
+
+  const handleCommHubAnalyze = async () => {
+    if (!commHubBody.trim()) return;
+    setCommHubLoading(true);
+    setCommHubSuggestion(null);
+    try {
+      const result = await matchCommunicationToCase(
+        { subject: commHubSubject, body: commHubBody },
+        dbCases
+      );
+      if (result && typeof result === 'object') {
+        const suggestedId = (result as any).suggestedCaseId ?? null;
+        setCommHubSuggestion({
+          suggestedCaseId: suggestedId || null,
+          reasoning: (result as any).reasoning || 'No reasoning provided.',
+          confidence: typeof (result as any).confidence === 'number' ? (result as any).confidence : 0,
+        });
+        setCommHubSelectedCaseId(suggestedId || null);
+      } else {
+        setCommHubSuggestion({ suggestedCaseId: null, reasoning: 'AI suggested new case.', confidence: 0 });
+        setCommHubSelectedCaseId(null);
+      }
+    } catch (e: any) {
+      console.error('Comm Hub analyze error:', e);
+      const msg = e?.message || String(e);
+      alert(msg ? `Analysis failed: ${msg}` : 'Analysis failed. Please try again.');
+    } finally {
+      setCommHubLoading(false);
+    }
+  };
+
+  const handleCommHubAccept = async () => {
+    if (!commHubBody.trim()) return;
+    setCommHubAccepting(true);
+    try {
+      const summary = await summarizeCommForLog({ body: commHubBody, subject: commHubSubject });
+      const narrative = (summary as any)?.narrative || commHubSubject || 'Email correspondence reviewed.';
+      const hours = typeof (summary as any)?.hours === 'number' ? (summary as any).hours : 0.2;
+      const code = (summary as any)?.code || 'SU';
+
+      const isNewCase = !commHubSelectedCaseId;
+      if (isNewCase) {
+        const parsed = await parseEmailToCase(commHubBody, commHubSender || 'unknown');
+        let defendantFirst = (parsed as any)?.defendant_first ?? '';
+        let defendantLast = (parsed as any)?.defendant_last ?? '';
+        let attorneyName = (parsed as any)?.lead_counsel ?? '';
+        if ((!defendantFirst && !defendantLast) && attorneyName && !attorneyName.includes('@') && attorneyName.trim().split(/\s+/).length >= 2) {
+          const parts = attorneyName.trim().split(/\s+/);
+          defendantLast = parts[parts.length - 1] || '';
+          defendantFirst = parts.slice(0, -1).join(' ') || '';
+          attorneyName = '';
+        }
+        const newId = crypto.randomUUID();
+        const newCase: Case = {
+          id: newId,
+          caseNumber: (parsed as any)?.case_number || '',
+          judgeName: (parsed as any)?.judge || '',
+          voucherStatus: VoucherStatus.MISSING,
+          status: CaseStatus.OPEN,
+          dateOpened: todayStr,
+          dateClosed: '',
+          attorneyName,
+          defendantFirstName: defendantFirst,
+          defendantLastName: defendantLast || 'NEW CASE',
+          nextCourtDate: (parsed as any)?.next_court_date || '',
+          nextEventDescription: (parsed as any)?.hearing_type || '',
+          evidenceItems: [],
+          activities: [{ id: 'init', caseId: newId, code: 'IN', description: narrative, hours: 0.2, date: todayStr }],
+          communications: [{ id: crypto.randomUUID().slice(0, 9), date: commHubDate, type: 'Email', content: commHubBody.slice(0, 500), recipient: commHubSender }],
+          dispositionNotes: '',
+          amountPaid: 0,
+          datePaid: '',
+          jurisdiction_id: jurisdictions[0]?.id ?? null,
+          needsIntake: true,
+        };
+        await persistCase(newCase);
+        await fetchAll();
+        setActiveTab('cases');
+        setSelectedCaseId(newId);
+        setCommHubSubject(''); setCommHubBody(''); setCommHubSender(''); setCommHubSuggestion(null); setCommHubSelectedCaseId(null);
+        alert('New case created with IN activity. Case opened.');
+      } else {
+        const c = dbCases.find(x => x.id === commHubSelectedCaseId);
+        if (!c) { alert('Case not found.'); return; }
+        const newActivity = { id: Math.random().toString(36).slice(2), caseId: c.id, code: 'AE', description: narrative, hours: 0.2, date: todayStr };
+        const updatedCase: Case = {
+          ...c,
+          activities: [...(c.activities || []), newActivity],
+          communications: [...(c.communications || []), { id: crypto.randomUUID().slice(0, 9), date: commHubDate, type: 'Email', content: commHubBody.slice(0, 500), recipient: commHubSender }],
+        };
+        await persistCase(updatedCase);
+        const taskSummary = narrative.slice(0, 200) || commHubSubject || 'Task from attorney email';
+        const task = {
+          id: crypto.randomUUID(),
+          taskDate: todayStr,
+          defendantName: `${c.defendantLastName}, ${c.defendantFirstName}`,
+          attorneyName: c.attorneyName || '',
+          caseNumber: c.caseNumber || '',
+          taskDescription: taskSummary,
+          dueDate: todayStr,
+          priority: 'Medium' as TaskPriority,
+          completed: false,
+          caseId: c.id,
+          needsIntake: true,
+        };
+        await persistTask(task);
+        await fetchAll();
+        setActiveTab('cases');
+        setSelectedCaseId(c.id);
+        setCommHubSubject(''); setCommHubBody(''); setCommHubSender(''); setCommHubSuggestion(null); setCommHubSelectedCaseId(null);
+        alert('Activity and task added to case. Communication logged.');
+      }
+    } catch (e) {
+      alert('Accept failed. ' + (e as Error).message);
+    } finally {
+      setCommHubAccepting(false);
     }
   };
 
@@ -912,6 +1204,11 @@ const [savingProfile, setSavingProfile] = useState(false);
     });
 
     return filtered.sort((a, b) => {
+      const needA = !!(a as any).needsIntake;
+      const needB = !!(b as any).needsIntake;
+      if (needA && !needB) return -1;
+      if (!needA && needB) return 1;
+
       const isPlaceholder = (c: Case) => {
         const l = (c.defendantLastName || '').toUpperCase();
         const f = (c.defendantFirstName || '').trim();
@@ -1047,6 +1344,7 @@ const [savingProfile, setSavingProfile] = useState(false);
           {[ 
             { id: 'dashboard', icon: LayoutDashboard, label: 'Mission Control' }, 
             { id: 'intake', icon: Inbox, label: 'Intake Folder' },
+            { id: 'commhub', icon: MessageSquare, label: 'Communication Hub' },
             { id: 'cases', icon: FolderOpen, label: 'Case Files' }, 
             { id: 'global_tasks', icon: ListTodo, label: 'Investigative Tasks' },
             { id: 'daily_logs', icon: CalendarRange, label: 'Workload Log' },
@@ -1348,9 +1646,17 @@ const [savingProfile, setSavingProfile] = useState(false);
                    <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] px-2 flex items-center gap-3 shrink-0"><ListTodo size={16} className="text-indigo-600"/> Tactical Feed</h3>
                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 pb-10">
                      {sortedGlobalTasks.filter(t => !t.completed).map(t => (
-                       <div key={t.id} className="p-6 bg-white border border-slate-100 rounded-[32px] shadow-sm flex items-center justify-between hover:border-indigo-200 transition-all cursor-pointer group" onClick={() => setSelectedCaseId(t.caseId)}>
+                       <div key={t.id} className={`p-6 bg-white border rounded-[32px] shadow-sm flex items-center justify-between hover:border-indigo-200 transition-all cursor-pointer group ${(t as any).needsIntake ? 'border-l-4 border-l-amber-400 border border-slate-100' : 'border border-slate-100'}`} onClick={() => setSelectedCaseId(t.caseId)}>
                          <div className="flex-1 min-w-0 pr-4">
-                           <p className="text-[11px] font-black text-slate-900 uppercase leading-tight truncate mb-1">{t.defendantName}</p>
+                           <div className="flex items-center gap-2 flex-wrap mb-1">
+                             <p className="text-[11px] font-black text-slate-900 uppercase leading-tight truncate">{t.defendantName}</p>
+                             {(t as any).needsIntake && (
+                               <>
+                                 <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[7px] font-black uppercase shrink-0">Complete intake</span>
+                                 <button onClick={(e) => { e.stopPropagation(); persistTask({ ...t, needsIntake: false }); }} className="px-1.5 py-0.5 bg-amber-600 text-white rounded text-[6px] font-black uppercase hover:bg-amber-700 transition-all shrink-0">Done</button>
+                               </>
+                             )}
+                           </div>
                            <p className="text-[10px] font-bold text-slate-500 leading-snug break-words line-clamp-2">
                              {t.taskDescription}
                            </p>
@@ -1406,7 +1712,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                         </button>
                       ))}
                    </div>
-                   <button onClick={() => { setIsAddingTask(true); setEditingTaskId(null); setNewTask({ defendantName: '', taskDescription: '', dueDate: todayStr, priority: 'Medium', caseId: '' }); }} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all shadow-xl active:scale-95 flex items-center gap-3">
+                   <button onClick={() => { setIsAddingTask(true); setEditingTaskId(null); setCaseSearchQuery(''); setNewTask({ defendantName: '', attorneyName: '', taskDescription: '', dueDate: todayStr, priority: 'Medium', caseId: '', caseNumber: '' }); }} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all shadow-xl active:scale-95 flex items-center gap-3">
                      <Plus size={20}/> New Task
                    </button>
                 </div>
@@ -1418,14 +1724,38 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
                       {editingTaskId ? 'Revise Task' : 'New Strategic Task'}
                     </h2>
-                    <button onClick={() => { setIsAddingTask(false); setEditingTaskId(null); }} className="p-3 hover:bg-slate-100 rounded-xl transition-all"><X size={24}/></button>
+                    <button onClick={() => { setIsAddingTask(false); setEditingTaskId(null); setCaseSearchQuery(''); }} className="p-3 hover:bg-slate-100 rounded-xl transition-all"><X size={24}/></button>
                   </div>
                   <div className="grid grid-cols-12 gap-8 items-end">
+                    <div className="col-span-4 space-y-2 relative">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last name (search)</p>
+                      <input value={caseSearchQuery} onChange={e => setCaseSearchQuery(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[11px] font-black uppercase outline-none focus:border-indigo-600 transition-all" placeholder="Type last name to find case..."/>
+                      {caseSearchMatches.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                          {caseSearchMatches.map(c => (
+                            <button key={c.id} type="button" onClick={() => {
+                              setNewTask(prev => ({ ...prev, defendantName: `${c.defendantLastName || ''}, ${c.defendantFirstName || ''}`.replace(/^,\s*|,\s*$/g, '').trim() || c.defendantLastName || 'Unknown', attorneyName: c.attorneyName || '', caseNumber: c.caseNumber || '', caseId: c.id }));
+                              setCaseSearchQuery('');
+                            }} className="w-full text-left px-4 py-3 hover:bg-indigo-50 rounded-xl text-[11px] font-bold border-b border-slate-50 last:border-0">
+                              {c.defendantLastName}, {c.defendantFirstName} — REF: {c.caseNumber}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <div className="col-span-4 space-y-2">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Defendant</p>
-                      <input value={newTask.defendantName} onChange={e => setNewTask({...newTask, defendantName: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[11px] font-black uppercase outline-none focus:border-indigo-600 transition-all" placeholder="Enter name..."/>
+                      <input value={newTask.defendantName} onChange={e => setNewTask({...newTask, defendantName: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[11px] font-black uppercase outline-none focus:border-indigo-600 transition-all" placeholder="Auto-filled or enter name..."/>
                     </div>
-                    <div className="col-span-8 space-y-2">
+                    <div className="col-span-4 space-y-2">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Case number</p>
+                      <input value={newTask.caseNumber} onChange={e => setNewTask({...newTask, caseNumber: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[11px] font-bold outline-none focus:border-indigo-600 transition-all" placeholder="Auto-filled or enter..."/>
+                    </div>
+                    <div className="col-span-12 space-y-2">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Attorney</p>
+                      <input value={newTask.attorneyName} onChange={e => setNewTask({...newTask, attorneyName: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[11px] font-bold outline-none focus:border-indigo-600 transition-all" placeholder="Auto-filled or enter attorney name..."/>
+                    </div>
+                    <div className="col-span-12 space-y-2">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Directive</p>
                       <input value={newTask.taskDescription} onChange={e => setNewTask({...newTask, taskDescription: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-[11px] font-bold outline-none focus:border-indigo-600 transition-all" placeholder="Describe directive..."/>
                     </div>
@@ -1442,20 +1772,25 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div className="col-span-6 flex gap-3">
                        <button onClick={async () => {
                          if (!newTask.defendantName || !newTask.taskDescription) return;
+                         const existing = editingTaskId ? globalTasks.find(x => x.id === editingTaskId) : null;
                          const task = {
                            id: editingTaskId || crypto.randomUUID(),
-                           taskDate: todayStr,
+                           taskDate: existing?.taskDate || todayStr,
                            defendantName: newTask.defendantName,
+                           attorneyName: newTask.attorneyName || '',
+                           caseNumber: newTask.caseNumber || '',
                            taskDescription: newTask.taskDescription,
                            dueDate: newTask.dueDate,
                            priority: newTask.priority,
-                           completed: false,
-                           caseId: newTask.caseId
+                           completed: existing?.completed ?? false,
+                           caseId: newTask.caseId,
+                           needsIntake: newTask.needsIntake ?? (existing as any)?.needsIntake
                          };
                          await persistTask(task);
                          setIsAddingTask(false);
                          setEditingTaskId(null);
-                         setNewTask({ defendantName: '', taskDescription: '', dueDate: todayStr, priority: 'Medium', caseId: '' });
+                         setCaseSearchQuery('');
+                         setNewTask({ defendantName: '', attorneyName: '', taskDescription: '', dueDate: todayStr, priority: 'Medium', caseId: '', caseNumber: '' });
                        }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-indigo-600 transition-all active:scale-95 flex items-center justify-center gap-3">
                          {editingTaskId ? 'Commit' : 'Initialize'}
                        </button>
@@ -1468,14 +1803,23 @@ const [savingProfile, setSavingProfile] = useState(false);
                 {sortedGlobalTasks
                   .filter(t => taskFilter === 'Active' ? !t.completed : t.completed)
                   .map(t => (
-                  <div key={t.id} className="p-8 bg-white border border-slate-100 rounded-[48px] shadow-sm flex items-center justify-between group transition-all cursor-pointer hover:border-indigo-200" onClick={() => t.caseId && setSelectedCaseId(t.caseId)}>
+                  <div key={t.id} className={`p-8 bg-white border rounded-[48px] shadow-sm flex items-center justify-between group transition-all cursor-pointer hover:border-indigo-200 ${(t as any).needsIntake ? 'border-l-4 border-l-amber-400 border border-slate-100' : 'border border-slate-100'}`} onClick={() => t.caseId && setSelectedCaseId(t.caseId)}>
                     <div className="flex items-center gap-10 flex-1">
                       <button onClick={(e) => { e.stopPropagation(); persistTask({...t, completed: !t.completed}); }} className={`w-12 h-12 rounded-[20px] flex items-center justify-center transition-all border-4 ${t.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-100 hover:border-indigo-600 text-transparent'}`}>
                         <Check size={24}/>
                       </button>
                       <div className="flex-1">
-                        <p className={`text-[15px] font-black uppercase tracking-tight ${t.completed ? 'text-slate-300' : 'text-slate-900'}`}>{t.defendantName}</p>
-                        <p className={`text-[12px] font-medium leading-relaxed ${t.completed ? 'text-slate-200' : 'text-slate-500'}`}>{t.taskDescription}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className={`text-[15px] font-black uppercase tracking-tight ${t.completed ? 'text-slate-300' : 'text-slate-900'}`}>{t.defendantName}</p>
+                          {(t as any).needsIntake && !t.completed && (
+                            <>
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded text-[9px] font-black uppercase tracking-widest shrink-0">Complete intake</span>
+                              <button onClick={(e) => { e.stopPropagation(); persistTask({ ...t, needsIntake: false }); }} className="px-2 py-1 bg-amber-600 text-white rounded text-[8px] font-black uppercase tracking-wider hover:bg-amber-700 transition-all shrink-0">Mark intake done</button>
+                            </>
+                          )}
+                        </div>
+                        {t.attorneyName ? <p className={`text-[10px] font-bold uppercase tracking-wide mt-0.5 ${t.completed ? 'text-slate-300' : 'text-slate-400'}`}>Atty: {t.attorneyName}</p> : null}
+                        <p className={`text-[12px] font-medium leading-relaxed mt-1 ${t.completed ? 'text-slate-200' : 'text-slate-500'}`}>{t.taskDescription}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-10">
@@ -1489,7 +1833,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                          </div>
                        </div>
                        <span className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 ${t.priority === 'Critical' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-slate-50 text-slate-500'}`}>{t.priority}</span>
-                       <button onClick={(e) => { e.stopPropagation(); setEditingTaskId(t.id); setNewTask({ defendantName: t.defendantName, taskDescription: t.taskDescription, dueDate: t.dueDate, priority: t.priority, caseId: t.caseId }); }} className="p-3 text-slate-300 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Pencil size={18}/></button>
+                       <button onClick={(e) => { e.stopPropagation(); setEditingTaskId(t.id); setCaseSearchQuery(''); setNewTask({ defendantName: t.defendantName, attorneyName: t.attorneyName || '', taskDescription: t.taskDescription, dueDate: t.dueDate, priority: t.priority, caseId: t.caseId, caseNumber: t.caseNumber || '', needsIntake: (t as any).needsIntake }); }} className="p-3 text-slate-300 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"><Pencil size={18}/></button>
                     </div>
                   </div>
                 ))}
@@ -1503,9 +1847,65 @@ const [savingProfile, setSavingProfile] = useState(false);
               <div className="bg-white rounded-[48px] border-4 border-dashed border-slate-100 shadow-2xl p-16 space-y-10 text-center">
                 <div className="flex flex-col items-center gap-6"><div className="w-24 h-24 bg-indigo-600 rounded-[32px] flex items-center justify-center text-white shadow-xl animate-pulse"><Sparkles size={40}/></div><div><h2 className="text-2xl font-black uppercase tracking-tight">AI Intake Dropzone</h2><p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">Paste assignment email or raw case text</p></div></div>
                 <textarea value={intakeText} onChange={(e) => setIntakeText(e.target.value)} className="w-full h-96 p-10 bg-slate-50 border border-slate-200 rounded-[40px] outline-none focus:border-indigo-600 focus:bg-white transition-all font-medium text-sm leading-relaxed shadow-inner" placeholder="Drop investigation request text here..."/>
+                <p className="text-[10px] text-slate-400 uppercase tracking-widest">No cases yet? <button type="button" onClick={seedSampleCases} disabled={isProcessing} className="text-indigo-600 font-black hover:underline disabled:opacity-50">Add 4 sample cases for testing</button></p>
                 <button onClick={handleIntake} disabled={isIntaking || !intakeText} className="w-full py-6 bg-slate-900 text-white rounded-[32px] font-black uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-4 hover:bg-indigo-600 transition-all shadow-xl active:scale-95 disabled:opacity-50">
                   {isIntaking ? <Loader2 size={24} className="animate-spin"/> : <Cpu size={24}/>} Initialize Intel Logic
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'commhub' && (
+            <div className="animate-in fade-in max-w-5xl mx-auto space-y-10 pb-20">
+              <header className="flex justify-between items-center">
+                <h1 className="text-3xl font-black uppercase tracking-tight text-slate-900 flex items-center gap-4">
+                  <MailCheck size={32} className="text-indigo-600"/> Communication Hub
+                </h1>
+              </header>
+              <div className="bg-white rounded-[48px] border-4 border-dashed border-slate-100 shadow-2xl p-16 space-y-8">
+                <p className="text-sm font-medium text-slate-500">Paste email content below. AI will suggest an existing case or new case, then you can accept to create a case + IN activity or add activity + task to an existing case.</p>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Subject</label>
+                    <input value={commHubSubject} onChange={(e) => setCommHubSubject(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-indigo-600 font-medium text-sm" placeholder="Email subject"/>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Sender (name or email)</label>
+                    <input value={commHubSender} onChange={(e) => setCommHubSender(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-indigo-600 font-medium text-sm" placeholder="e.g. Paul Green or paul.green@email.com"/>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Date</label>
+                  <input type="date" value={commHubDate} onChange={(e) => setCommHubDate(e.target.value)} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-indigo-600 font-medium text-sm"/>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Body (required)</label>
+                  <textarea value={commHubBody} onChange={(e) => setCommHubBody(e.target.value)} rows={10} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-indigo-600 font-medium text-sm leading-relaxed" placeholder="Paste email body..."/>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <button onClick={handleCommHubAnalyze} disabled={commHubLoading || !commHubBody.trim()} className="py-4 px-8 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest flex items-center gap-2 hover:bg-indigo-600 transition-all disabled:opacity-50">
+                    {commHubLoading ? <Loader2 size={20} className="animate-spin"/> : <MailSearchIcon size={20}/>} Analyze & suggest
+                  </button>
+                  <button onClick={handleCommHubAccept} disabled={commHubAccepting || !commHubBody.trim()} className="py-4 px-8 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest flex items-center gap-2 hover:bg-indigo-700 transition-all disabled:opacity-50">
+                    {commHubAccepting ? <Loader2 size={20} className="animate-spin"/> : <Check size={20}/>} Accept & apply
+                  </button>
+                </div>
+                {commHubSuggestion && (
+                  <div className="p-6 bg-indigo-50 border border-indigo-100 rounded-[32px] space-y-4">
+                    <h3 className="text-sm font-black uppercase text-slate-900 tracking-tight">Suggestion</h3>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Apply to:</label>
+                      <select value={commHubSelectedCaseId ?? '__new__'} onChange={(e) => setCommHubSelectedCaseId(e.target.value === '__new__' ? null : e.target.value)} className="p-3 bg-white border border-slate-200 rounded-xl font-medium text-sm min-w-[220px]">
+                        <option value="__new__">New case</option>
+                        {dbCases.map(c => (
+                          <option key={c.id} value={c.id}>{c.defendantLastName}, {c.defendantFirstName} — {c.caseNumber || 'No REF'}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs font-medium text-slate-600"><span className="font-black text-slate-800">Reasoning:</span> {dbCases.reduce((text, c) => text.split(c.id).join(`${c.defendantLastName}, ${c.defendantFirstName} — ${c.caseNumber || 'No REF'}`), commHubSuggestion.reasoning)}</p>
+                    <p className="text-[10px] font-black uppercase text-slate-500">Confidence: {Math.round(commHubSuggestion.confidence * 100)}%</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1830,8 +2230,8 @@ const [savingProfile, setSavingProfile] = useState(false);
           )}
 
           {activeTab === 'cases' && (
-            <div className="animate-in fade-in max-w-[1600px] mx-auto space-y-8 pb-20">
-               <div className="sticky top-[180px] z-[60] bg-white p-6 rounded-[40px] border border-slate-100 shadow-xl flex flex-col gap-6">
+            <div className="animate-in fade-in max-w-[1600px] mx-auto flex flex-col h-[calc(100vh-220px)] min-h-0 pb-6">
+               <div className="shrink-0 bg-white p-6 rounded-[40px] border border-slate-100 shadow-xl flex flex-col gap-6 mb-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg">
@@ -1895,8 +2295,8 @@ const [savingProfile, setSavingProfile] = useState(false);
                   </div>
                </div>
 
-               <div className="bg-white rounded-[64px] border shadow-2xl overflow-hidden min-h-[700px] flex flex-col mb-20 transition-all">
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+               <div className="flex-1 min-h-0 bg-white rounded-[64px] border shadow-2xl overflow-hidden flex flex-col transition-all">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                   <table className="w-full text-left table-fixed border-separate border-spacing-0">
                     <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest sticky top-0 z-20 shadow-xl">
                       <tr>
@@ -1914,12 +2314,15 @@ const [savingProfile, setSavingProfile] = useState(false);
                         const isStagnant = calculateDaysDiff(lastActivityDate) >= 45 && c.status !== CaseStatus.CLOSED;
 
                         return (
-                          <tr key={c.id} className="hover:bg-indigo-50/40 transition-all cursor-pointer group" onClick={() => setSelectedCaseId(c.id)}>
+                          <tr key={c.id} className={`hover:bg-indigo-50/40 transition-all cursor-pointer group ${(c as any).needsIntake ? 'bg-amber-50/50 border-l-4 border-l-amber-400' : ''}`} onClick={() => setSelectedCaseId(c.id)}>
                             <td className="px-12 py-10">
                               <div className="flex items-center gap-5">
                                 <div className="flex flex-col">
-                                  <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-3 flex-wrap">
                                     <span className="font-black uppercase text-slate-900 text-sm tracking-tight">{c.defendantLastName}, {c.defendantFirstName}</span>
+                                    {(c as any).needsIntake && (
+                                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded text-[8px] font-black uppercase tracking-widest shrink-0">Complete intake</span>
+                                    )}
                                     {isUrgent && (
                                       <span className="flex items-center gap-2 px-3 py-1 bg-rose-600 text-white text-[8px] font-black uppercase rounded-full animate-pulse shadow-lg ring-4 ring-rose-50 border border-white/20">
                                         <Flame size={10}/> Urgent
@@ -2152,6 +2555,7 @@ const [savingProfile, setSavingProfile] = useState(false);
           activityCodes={activityCodes} 
           tasks={globalTasks}
           investigators={investigators}
+          jurisdictions={jurisdictions}
           isAdmin={isAdmin}
           onUpdateTask={persistTask}
         />

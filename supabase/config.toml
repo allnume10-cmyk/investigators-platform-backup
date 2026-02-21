@@ -1,0 +1,22 @@
+# Supabase project config (used by CLI for local dev and link)
+# Replace project_id with your actual project ref if you use 'supabase link'
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+# Per-function config: verify_jwt = false allows anon calls (e.g. from browser)
+[functions.gemini-proxy]
+verify_jwt = false

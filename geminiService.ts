@@ -1,4 +1,69 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { supabase } from "./supabase";
+
+const env = typeof import.meta !== "undefined" ? (import.meta as { env?: { VITE_GEMINI_API_KEY?: string; VITE_USE_GEMINI_PROXY?: string; VITE_SUPABASE_URL?: string; VITE_SUPABASE_ANON_KEY?: string } }).env : undefined;
+const useGeminiProxy = (): boolean => env?.VITE_USE_GEMINI_PROXY === "true";
+
+function getSupabaseConfig(): { url: string; anonKey: string } | null {
+  const u = env?.VITE_SUPABASE_URL;
+  const k = env?.VITE_SUPABASE_ANON_KEY;
+  if (u && k && u.startsWith("http") && k.length > 20) return { url: u.replace(/\/$/, ""), anonKey: k };
+  return null;
+}
+
+async function invokeProxy<T>(action: string, payload: unknown): Promise<T> {
+  const config = getSupabaseConfig();
+  const body = JSON.stringify({ action, payload });
+
+  if (config) {
+    const functionUrl = `${config.url}/functions/v1/gemini-proxy`;
+    try {
+      const res = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.anonKey}`,
+        },
+        body,
+      });
+      const text = await res.text();
+      let data: unknown;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error(res.ok ? "Invalid response" : `Edge Function ${res.status}: ${text.slice(0, 200)}`);
+      }
+      if (!res.ok) {
+        const errMsg = typeof data === "object" && data && "error" in data ? String((data as { error: string }).error) : `HTTP ${res.status}`;
+        throw new Error(errMsg);
+      }
+      if (data && typeof data === "object" && "error" in data && (data as { error?: string }).error)
+        throw new Error(String((data as { error: string }).error));
+      return data as T;
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      throw new Error(String(e));
+    }
+  }
+
+  const { data, error } = await supabase.functions.invoke("gemini-proxy", { body: { action, payload } });
+  if (error) {
+    const err = error as { message?: string; context?: unknown };
+    const msg = err.message || "Proxy request failed";
+    const ctx = err.context;
+    const detail =
+      ctx != null
+        ? typeof ctx === "object" && "message" in ctx
+          ? String((ctx as { message?: string }).message)
+          : String(ctx)
+        : "";
+    console.error("Edge Function error:", msg, ctx);
+    throw new Error(detail ? `${msg} (${detail})` : msg);
+  }
+  if (data && typeof data === "object" && "error" in data && data.error)
+    throw new Error(String((data as { error: string }).error));
+  return data as T;
+}
 
 // Standard retry wrapper for API resilience
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 5): Promise<T> {
@@ -32,7 +97,7 @@ const safeJsonParse = (text: string, fallback: any = {}) => {
 
 export const generateGlobalIntelligenceBrief = async (firmData: any) => {
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const prompt = `Virtual Chief of Staff Briefing for Gregory at BRENT'S INVESTIGATIVE SERVICES.
     Matters: ${firmData.activeMattersCount}, Urgent: ${firmData.urgentActionCount}, Revenue: $${firmData.totalSettlement.toLocaleString()}.
@@ -46,12 +111,30 @@ export const generateGlobalIntelligenceBrief = async (firmData: any) => {
 };
 
 export const matchCommunicationToCase = async (comm: any, cases: any[]) => {
+  // No cases: suggest new case without calling the API (avoids schema/empty-list edge cases)
+  if (!cases || cases.length === 0) {
+    return { suggestedCaseId: null, reasoning: 'No existing cases in the system.', confidence: 0 };
+  }
+  if (useGeminiProxy()) {
+    return withRetry(() => invokeProxy("matchCommunicationToCase", { comm, cases }));
+  }
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-    const simplifiedCases = cases.map(c => ({ id: c.id, name: `${c.defendantLastName}, ${c.defendantFirstName} `, number: c.caseNumber }));
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
+    const simplifiedCases = cases.map(c => ({ id: c.id, name: `${c.defendantLastName}, ${c.defendantFirstName}`, number: c.caseNumber || '' }));
+    const bodySnippet = (comm.body || '').slice(0, 2000);
+    const prompt = `You are matching an email to an existing case dossier. If the email clearly refers to a defendant name or case number (e.g. REF 2024-004) that matches a dossier, return that dossier's id. Otherwise return empty string for suggestedCaseId (new case).
+
+In your reasoning, always refer to dossiers by defendant name and case number (e.g. "Wilson, James — REF 2024-001"). Do not use or mention dossier ids in the reasoning text. If multiple dossiers share the same defendant name, list each as "LastName, FirstName — REF number".
+
+Email subject: ${comm.subject || ''}
+Email body (excerpt): ${bodySnippet}
+
+Dossiers (id, name, number): ${JSON.stringify(simplifiedCases)}
+
+Respond with JSON only: suggestedCaseId (string; use dossier id or "" for new case), reasoning (string; use name and case number only, no ids), confidence (number 0-1).`;
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Match: ${comm.subject}. Dossiers: ${JSON.stringify(simplifiedCases)}`,
+      contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -64,13 +147,21 @@ export const matchCommunicationToCase = async (comm: any, cases: any[]) => {
         }
       }
     });
-    return safeJsonParse(response.text || '{}', null);
+    const raw = response.text || (response as any).candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const parsed = safeJsonParse(raw, null);
+    if (parsed && typeof parsed.suggestedCaseId === 'string' && parsed.suggestedCaseId.trim() === '') {
+      parsed.suggestedCaseId = null;
+    }
+    return parsed;
   });
 };
 
 export const summarizeCommForLog = async (comm: any) => {
+  if (useGeminiProxy()) {
+    return withRetry(() => invokeProxy("summarizeCommForLog", { comm }));
+  }
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Summarize in professional investigative PAST TENSE: ${comm.body}`,
@@ -92,7 +183,7 @@ export const summarizeCommForLog = async (comm: any) => {
 
 export const processAudioToActivity = async (base64Audio: string, mimeType: string, activityCodes: { code: string, label: string }[]) => {
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
@@ -118,11 +209,18 @@ export const processAudioToActivity = async (base64Audio: string, mimeType: stri
 };
 
 export const parseEmailToCase = async (emailText: string, senderEmail: string) => {
+  if (useGeminiProxy()) {
+    return withRetry(() => invokeProxy("parseEmailToCase", { emailText, senderEmail }));
+  }
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
-      contents: `Extract intake from: ${emailText}`,
+      contents: `Extract intake from this email. Be precise about who is who.
+- defendant_first and defendant_last: the DEFENDANT or CLIENT (the person the case is about). Example: "Linda Garcia" → defendant_first: Linda, defendant_last: Garcia.
+- lead_counsel: the ATTORNEY or LAWYER (counsel for the defendant). Often the email sender. Do NOT put the defendant name here.
+- case_number: any REF or case ID mentioned.
+Email body: ${emailText}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -157,7 +255,7 @@ export const parseEmailToCase = async (emailText: string, senderEmail: string) =
 
 export const parseBulkSpreadsheet = async (rawText: string) => {
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: `CSV Parse: ${rawText}`,
@@ -183,7 +281,7 @@ export const parseBulkSpreadsheet = async (rawText: string) => {
 
 export const draftInvestigativeEmail = async (requestType: string, caseContext: any) => {
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Draft professional investigative update for ${caseContext.caseNumber}. Type: ${requestType}. End with: Andrea, BRENT'S INVESTIGATE SERVICES, LLC` });
     return response.text || '';
   });
@@ -191,7 +289,7 @@ export const draftInvestigativeEmail = async (requestType: string, caseContext: 
 
 export const generateAttorneyReport = async (reportType: string, attorneyName: string | null, data: any) => {
   return withRetry(async () => {
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const greetingName = attorneyName || "Counsel";
 
     let instruction = "";
