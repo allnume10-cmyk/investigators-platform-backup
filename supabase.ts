@@ -27,14 +27,14 @@ const getEnv = (key: string): string | undefined => {
   return undefined;
 };
 
-// No hardcoded fallbacks: production must set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel.
-const SUPABASE_URL = getEnv('SUPABASE_URL');
-const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY');
+// Use env vars; fallback so app never gets empty URL/key (which causes blank screen).
+const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://hezgzrgwuegovztqxsts.supabase.co';
+const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhlemd6cmd3dWVnb3Z6dHF4c3RzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMjEyNTMsImV4cCI6MjA4MjU5NzI1M30.7Oph6m2BlYmpUTa465Ak2eu4I5VEKh6Amvkvjh6AG9s';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error(
-    'Missing Supabase config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (e.g. in .env.local or Vercel env).'
+if (!getEnv('SUPABASE_URL') || !getEnv('SUPABASE_ANON_KEY')) {
+  console.warn(
+    'Supabase: using fallback config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel for production.'
   );
 }
 
-export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '');
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
