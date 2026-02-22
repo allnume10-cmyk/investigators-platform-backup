@@ -31,10 +31,18 @@ const getEnv = (key: string): string | undefined => {
 const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://hezgzrgwuegovztqxsts.supabase.co';
 const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhlemd6cmd3dWVnb3Z6dHF4c3RzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMjEyNTMsImV4cCI6MjA4MjU5NzI1M30.7Oph6m2BlYmpUTa465Ak2eu4I5VEKh6Amvkvjh6AG9s';
 
-if (!getEnv('SUPABASE_URL') || !getEnv('SUPABASE_ANON_KEY')) {
+const usingFallback = !getEnv('SUPABASE_URL') || !getEnv('SUPABASE_ANON_KEY');
+if (usingFallback) {
   console.warn(
     'Supabase: using fallback config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel for production.'
   );
 }
 
+// So we can see which backend the app is actually using (for debugging production data)
+const supabaseHost = SUPABASE_URL.replace(/^https?:\/\//, '').split('/')[0] || '';
+if (typeof window !== 'undefined') {
+  console.log('[Supabase backend]', supabaseHost, usingFallback ? '(fallback)' : '(env)');
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabaseBackendHost = supabaseHost;
