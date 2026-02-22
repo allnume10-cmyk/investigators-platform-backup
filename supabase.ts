@@ -27,7 +27,14 @@ const getEnv = (key: string): string | undefined => {
   return undefined;
 };
 
-const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://hezgzrgwuegovztqxsts.supabase.co';
-const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY') || 'sb_publishable_CBejwT03hCUws_9dOvkIrw_AZPSVB0k';
+// No hardcoded fallbacks: production must set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel.
+const SUPABASE_URL = getEnv('SUPABASE_URL');
+const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY');
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error(
+    'Missing Supabase config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (e.g. in .env.local or Vercel env).'
+  );
+}
+
+export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '');
