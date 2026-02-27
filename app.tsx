@@ -617,6 +617,17 @@ const [savingProfile, setSavingProfile] = useState(false);
 
   const toggleAlert = (key: string) => setCollapsedAlerts(prev => ({ ...prev, [key]: !prev[key] }));
 
+  // Mission Control risk alert header: same size for all (matched to smaller rendering so Overdue and others match).
+  const alertHeaderLabelStyle: React.CSSProperties = { fontSize: '9px', lineHeight: 1, minHeight: '12px', fontWeight: 900 };
+  const alertHeaderBadgeStyle: React.CSSProperties = { fontSize: '8px', lineHeight: 1, fontWeight: 900 };
+  const alertHeaderStyles = [
+    { ...alertHeaderLabelStyle, color: '#ea580c' },   // Evidence (orange-600)
+    { ...alertHeaderLabelStyle, color: '#2563eb' },   // Overdue (blue-600)
+    { ...alertHeaderLabelStyle, color: '#4f46e5' },   // Urgent (indigo-600)
+    { ...alertHeaderLabelStyle, color: '#818cf8' },   // Cold (indigo-300)
+    { ...alertHeaderLabelStyle, color: '#d97706' },   // Stagnant (amber-600)
+  ];
+
   // Case File Registry Filters & Sorting
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('Active');
   const [caseSort, setCaseSort] = useState<CaseSort>('Defendant');
@@ -1409,6 +1420,7 @@ const [savingProfile, setSavingProfile] = useState(false);
 
   return (
     <div className="flex h-screen w-screen bg-[#F8FAFC] overflow-hidden text-slate-900 font-sans relative">
+      <style dangerouslySetInnerHTML={{ __html: '[data-mission-alert-header]{font-size:9px!important;line-height:1!important;font-weight:900!important;}' }} />
       <aside className="w-64 bg-slate-900 text-white flex flex-col h-full fixed top-0 left-0 z-[100] shadow-2xl">
         <div className="p-8 border-b border-slate-800 flex flex-col items-center gap-4">
           <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-2xl border border-indigo-400">PRO</div>
@@ -1570,12 +1582,12 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div className="space-y-3">
                       <button 
                         onClick={() => toggleAlert('evidence')}
-                        className="w-full flex items-center justify-between group px-2 py-1 border-b border-orange-100 hover:bg-orange-50 transition-all"
+                        className="w-full flex items-center justify-between group px-2 h-10 border-b border-orange-100 hover:bg-orange-50 transition-all"
                       >
-                        <p className="text-[12px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-2">
-                          Evidence Alert <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.evidenceAlerts.length}]</span>
+                        <p data-mission-alert-header className="uppercase tracking-widest flex items-center gap-2 whitespace-nowrap shrink-0" style={alertHeaderStyles[0]}>
+                          Evidence Alert <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full leading-none" style={alertHeaderBadgeStyle}>[{dashboardAnalytics.evidenceAlerts.length}]</span>
                         </p>
-                        <ChevronDown size={14} className={`text-orange-400 transition-transform duration-300 ${collapsedAlerts.evidence ? '-rotate-90' : ''}`} />
+                        <ChevronDown size={14} className={`shrink-0 text-orange-400 transition-transform duration-300 flex-shrink-0 ${collapsedAlerts.evidence ? '-rotate-90' : ''}`} />
                       </button>
                       {!collapsedAlerts.evidence && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
@@ -1601,12 +1613,12 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div className="space-y-3">
                       <button 
                         onClick={() => toggleAlert('overdue')}
-                        className="w-full flex items-center justify-between group px-2 py-1 border-b border-blue-100 hover:bg-blue-50 transition-all"
+                        className="w-full flex items-center justify-between group px-2 h-10 border-b border-blue-100 hover:bg-blue-50 transition-all"
                       >
-                        <p className="text-[9px] font-black text-blue-900 uppercase tracking-widest flex items-center gap-2">
-                          Overdue Court Days <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full text-[7px]">[{dashboardAnalytics.overdueCourts.length}]</span>
+                        <p data-mission-alert-header className="uppercase tracking-widest flex items-center gap-2 whitespace-nowrap shrink-0" style={alertHeaderStyles[1]}>
+                          Overdue Court Days <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full leading-none" style={alertHeaderBadgeStyle}>[{dashboardAnalytics.overdueCourts.length}]</span>
                         </p>
-                        <ChevronDown size={14} className={`text-blue-400 transition-transform duration-300 ${collapsedAlerts.overdue ? '-rotate-90' : ''}`} />
+                        <ChevronDown size={14} className={`shrink-0 text-blue-400 transition-transform duration-300 flex-shrink-0 ${collapsedAlerts.overdue ? '-rotate-90' : ''}`} />
                       </button>
                       {!collapsedAlerts.overdue && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
@@ -1632,12 +1644,12 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div className="space-y-3">
                       <button 
                         onClick={() => toggleAlert('urgent')}
-                        className="w-full flex items-center justify-between group px-2 py-1 border-b border-indigo-100 hover:bg-indigo-50 transition-all"
+                        className="w-full flex items-center justify-between group px-2 h-10 border-b border-indigo-100 hover:bg-indigo-50 transition-all"
                       >
-                        <p className="text-[12px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                          Urgent Pre-Trial <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.urgentTrials.length}]</span>
+                        <p data-mission-alert-header className="uppercase tracking-widest flex items-center gap-2 whitespace-nowrap shrink-0" style={alertHeaderStyles[2]}>
+                          Urgent Pre-Trial <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full leading-none" style={alertHeaderBadgeStyle}>[{dashboardAnalytics.urgentTrials.length}]</span>
                         </p>
-                        <ChevronDown size={14} className={`text-indigo-400 transition-transform duration-300 ${collapsedAlerts.urgent ? '-rotate-90' : ''}`} />
+                        <ChevronDown size={14} className={`shrink-0 text-indigo-400 transition-transform duration-300 flex-shrink-0 ${collapsedAlerts.urgent ? '-rotate-90' : ''}`} />
                       </button>
                       {!collapsedAlerts.urgent && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
@@ -1663,12 +1675,12 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div className="space-y-3">
                       <button 
                         onClick={() => toggleAlert('cold')}
-                        className="w-full flex items-center justify-between group px-2 py-1 border-b border-indigo-50 hover:bg-indigo-50/50 transition-all"
+                        className="w-full flex items-center justify-between group px-2 h-10 border-b border-indigo-50 hover:bg-indigo-50/50 transition-all"
                       >
-                        <p className="text-[12px] font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
-                          Cold Start Registry <span className="bg-indigo-100 text-indigo-600 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.coldStarts.length}]</span>
+                        <p data-mission-alert-header className="uppercase tracking-widest flex items-center gap-2 whitespace-nowrap shrink-0" style={alertHeaderStyles[3]}>
+                          Cold Start Registry <span className="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full leading-none" style={alertHeaderBadgeStyle}>[{dashboardAnalytics.coldStarts.length}]</span>
                         </p>
-                        <ChevronDown size={14} className={`text-indigo-400 transition-transform duration-300 ${collapsedAlerts.cold ? '-rotate-90' : ''}`} />
+                        <ChevronDown size={14} className={`shrink-0 text-indigo-400 transition-transform duration-300 flex-shrink-0 ${collapsedAlerts.cold ? '-rotate-90' : ''}`} />
                       </button>
                       {!collapsedAlerts.cold && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
@@ -1694,12 +1706,12 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div className="space-y-3">
                       <button 
                         onClick={() => toggleAlert('stagnant')}
-                        className="w-full flex items-center justify-between group px-2 py-1 border-b border-amber-100 hover:bg-amber-50 transition-all"
+                        className="w-full flex items-center justify-between group px-2 h-10 border-b border-amber-100 hover:bg-amber-50 transition-all"
                       >
-                        <p className="text-[12px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
-                          Stagnant Cases <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.stagnantRisk.length}]</span>
+                        <p data-mission-alert-header className="uppercase tracking-widest flex items-center gap-2 whitespace-nowrap shrink-0" style={alertHeaderStyles[4]}>
+                          Stagnant Cases <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full leading-none" style={alertHeaderBadgeStyle}>[{dashboardAnalytics.stagnantRisk.length}]</span>
                         </p>
-                        <ChevronDown size={14} className={`text-amber-400 transition-transform duration-300 ${collapsedAlerts.stagnant ? '-rotate-90' : ''}`} />
+                        <ChevronDown size={14} className={`shrink-0 text-amber-400 transition-transform duration-300 flex-shrink-0 ${collapsedAlerts.stagnant ? '-rotate-90' : ''}`} />
                       </button>
                       {!collapsedAlerts.stagnant && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
