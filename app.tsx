@@ -45,7 +45,7 @@ const investigatorLabel = (p: InvestigatorProfile) =>
 
 type LifecycleFilter = 'Active' | 'Unscheduled' | 'Archive';
 type CaseSort = 'Defendant' | 'Court Date' | 'Attorney' | 'Date Opened';
-type VoucherSegment = 'Missing' | 'Pre-Audit' | 'Submitted' | 'Paid' | 'Intend Not to Bill';
+type VoucherSegment = 'Missing' | 'Pre-Audit' | 'Submitted' | 'Paid' | 'Paid Retained Services' | 'Intend Not to Bill';
 type TimeframeOption = 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly' | 'All';
 
 const INITIAL_ACTIVITY_CODES: ActivityCode[] = [
@@ -121,7 +121,8 @@ const mapDbToCase = (c: any, todayStr: string): Case => ({
   dispositionNotes: c.dispositionNotes ?? '',
   datePaid: c.datePaid ?? '',
   amountPaid: Number(c.amountPaid ?? 0),
-  needsIntake: !!c.needs_intake
+  needsIntake: !!c.needs_intake,
+  isRetainedServices: !!c.is_retained_services
 });
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -336,6 +337,9 @@ const CaseJacket: React.FC<{
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-700 pr-5">REF: {localCase.caseNumber}</span>
                 <StatusBadge status={localCase.status}/>
                 <VoucherBadge status={localCase.voucherStatus}/>
+                {localCase.isRetainedServices && (
+                  <span className="px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest bg-violet-500/20 text-violet-200 border-violet-400/50">Retained Services</span>
+                )}
               </div>
             </div>
           </div>
@@ -446,6 +450,10 @@ const CaseJacket: React.FC<{
                               <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Amount Paid</p><input type="number" step="0.01" min="0" value={localCase.amountPaid ?? ''} onChange={e => updateCase('amountPaid', e.target.value ? Number(e.target.value) : 0)} className="w-full p-2.5 bg-slate-50 border rounded-lg text-xs font-bold outline-none" placeholder="0.00"/></div>
                             </div>
                           ) : <div />}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input type="checkbox" id="retained-services" checked={!!localCase.isRetainedServices} onChange={e => updateCase('isRetainedServices', e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"/>
+                          <label htmlFor="retained-services" className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Retained Services</label>
                         </div>
                       </div>
                       <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Strategic Notes</p><textarea value={localCase.dispositionNotes} onChange={e => updateCase('dispositionNotes', e.target.value)} className="w-full p-4 bg-slate-50 border rounded-xl text-xs font-medium h-48 outline-none resize-none focus:border-indigo-600 transition-all" placeholder="Enter notes..."/></div>
@@ -577,6 +585,9 @@ const AppShell: React.FC = () => {
   const [investigators, setInvestigators] = useState<InvestigatorProfile[]>([]);
   const [jurisdictions, setJurisdictions] = useState<Jurisdiction[]>([]);
   const [myRole, setMyRole] = useState<string | null>(null);
+  const [myJurisdictionId, setMyJurisdictionId] = useState<string | null>(null);
+  const [myJurisdictionIds, setMyJurisdictionIds] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const isAdmin = myRole === 'global_admin' || myRole === 'admin' || myRole === 'ADMIN';
 
   const [showProfile, setShowProfile] = useState(false);
@@ -704,9 +715,11 @@ const [savingProfile, setSavingProfile] = useState(false);
       const user = data.user;
       if (!user) return;
 
+      setCurrentUserId(user.id);
+
       const { data: prof, error } = await supabase
         .from('profiles')
-        .select('full_name, role')
+        .select('full_name, role, jurisdiction_id')
         .eq('user_id', user.id)
         .single();
 
@@ -717,9 +730,33 @@ const [savingProfile, setSavingProfile] = useState(false);
 
       setProfileName(prof?.full_name || '');
       setMyRole(prof?.role ?? null);
+      setMyJurisdictionId(prof?.jurisdiction_id ?? null);
+
+      // Load investigator's assigned jurisdictions (many-to-many). Admins skip this.
+      const role = (prof?.role && String(prof.role).toLowerCase()) || '';
+      if (role === 'global_admin' || role === 'admin') {
+        setMyJurisdictionIds([]);
+        return;
+      }
+      const { data: pjRows } = await supabase
+        .from('profile_jurisdictions')
+        .select('jurisdiction_id')
+        .eq('user_id', user.id);
+      const ids = (pjRows || []).map((r: { jurisdiction_id: string }) => r.jurisdiction_id);
+      if (ids.length) {
+        setMyJurisdictionIds(ids);
+        setMyJurisdictionId(ids[0]);
+      } else if (prof?.jurisdiction_id) {
+        setMyJurisdictionIds([prof.jurisdiction_id]);
+        setMyJurisdictionId(prof.jurisdiction_id);
+      } else {
+        setMyJurisdictionIds([]);
+        setMyJurisdictionId(null);
+      }
     })();
   }, []);
 
+  // Load investigators: non-admins see only themselves; global_admin sees all investigators (all jurisdictions).
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -736,26 +773,43 @@ const [savingProfile, setSavingProfile] = useState(false);
         return;
       }
 
+      // Load all profiles then filter by role (case-insensitive) so DB enum casing (e.g. Investigator) doesn't matter
       const { data: list, error } = await supabase
         .from('profiles')
-        .select('user_id, full_name')
-        .eq('role', 'investigator')
+        .select('user_id, full_name, role')
         .order('full_name', { ascending: true });
 
       if (error) {
         console.error('Failed to load investigators:', error);
+        setInvestigators([]);
         return;
       }
 
-      setInvestigators((list || []) as InvestigatorProfile[]);
+      const invList = (list || [])
+        .filter((p: { role?: string }) => p.role && String(p.role).toLowerCase() === 'investigator')
+        .map((p: { user_id: string; full_name: string | null }) => ({ user_id: p.user_id, full_name: p.full_name }));
+      setInvestigators(invList);
     })();
-  }, [isAdmin]);
+  }, [isAdmin, myRole]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Investigators only see jurisdictions they are assigned to (profile_jurisdictions); admins see all.
+  const displayJurisdictions = useMemo(() => {
+    if (isAdmin) return jurisdictions;
+    if (myJurisdictionIds.length) return jurisdictions.filter(j => myJurisdictionIds.includes(j.id));
+    return [];
+  }, [jurisdictions, isAdmin, myJurisdictionIds]);
+
+  // Investigators only see cases assigned to them; admins see all.
+  const casesForCurrentUser = useMemo(() => {
+    if (isAdmin || !currentUserId) return dbCases;
+    return dbCases.filter(c => c.assigned_to === currentUserId);
+  }, [dbCases, isAdmin, currentUserId]);
+
   const workloadByDate = useMemo(() => {
     const map: Record<string, { total: number, activities: (CaseActivity & { defendantName: string, caseId: string })[] }> = {};
-    dbCases.forEach(c => {
+    casesForCurrentUser.forEach(c => {
       (c.activities || []).forEach(a => {
         if (!map[a.date]) map[a.date] = { total: 0, activities: [] };
         map[a.date].total += (a.hours || 0);
@@ -763,7 +817,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       });
     });
     return map;
-  }, [dbCases]);
+  }, [casesForCurrentUser]);
 
   const dashboardAnalytics = useMemo(() => {
     const isValidCase = (c: Case) => {
@@ -773,7 +827,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       return f.length > 0 && l.length > 0 && !isPlaceholder;
     };
 
-    const validCases = dbCases.filter(isValidCase);
+    const validCases = casesForCurrentUser.filter(isValidCase);
     const activeMatters = validCases.filter(c => c.status === CaseStatus.OPEN);
     
     const highDutyDays = Object.entries(workloadByDate)
@@ -805,12 +859,19 @@ const [savingProfile, setSavingProfile] = useState(false);
 
     const coldStarts = activeMatters.filter(c => {
       const acts = c.activities || [];
-      const hasOnlyNewLog = acts.length === 1 && acts[0].code === 'NEW';
-      return hasOnlyNewLog && calculateDaysDiff(acts[0].date) >= 14;
-    }).map(c => ({ 
-      ...c, 
-      daysSinceNew: calculateDaysDiff(c.activities[0].date) 
-    })).sort((a,b) => b.daysSinceNew - a.daysSinceNew);
+      if (acts.length === 0) return false;
+      const onlyNewAndSu = acts.every(a => a.code === 'NEW' || a.code === 'SU');
+      const hasNew = acts.some(a => a.code === 'NEW');
+      if (!onlyNewAndSu || !hasNew) return false;
+      const newActs = acts.filter(a => a.code === 'NEW');
+      const earliestNewDate = newActs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0].date;
+      return calculateDaysDiff(earliestNewDate) >= 14;
+    }).map(c => {
+      const acts = c.activities || [];
+      const newActs = acts.filter(a => a.code === 'NEW');
+      const earliestNewDate = newActs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0].date;
+      return { ...c, daysSinceNew: calculateDaysDiff(earliestNewDate) };
+    }).sort((a,b) => b.daysSinceNew - a.daysSinceNew);
 
     const stagnantRisk = activeMatters.filter(c => {
       const logs = c.activities || [];
@@ -823,6 +884,7 @@ const [savingProfile, setSavingProfile] = useState(false);
     }).sort((a,b) => b.stagnantDays - a.stagnantDays);
 
     const totalSettlement = validCases.filter(c => c.voucherStatus === VoucherStatus.PAID).reduce((s, c) => s + (c.amountPaid || 0), 0);
+    const retainedServicesRevenue = validCases.filter(c => c.voucherStatus === VoucherStatus.PAID && c.isRetainedServices).reduce((s, c) => s + (c.amountPaid || 0), 0);
     const pendingRevenue = validCases
       .filter(c => c.voucherStatus === VoucherStatus.SUBMITTED)
       .reduce((total, c) => {
@@ -835,6 +897,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       'Pre-Audit': validCases.filter(c => c.status === CaseStatus.CLOSED && [VoucherStatus.MISSING, VoucherStatus.OPEN].includes(c.voucherStatus)).length,
       Submitted: validCases.filter(c => c.voucherStatus === VoucherStatus.SUBMITTED).length,
       Paid: validCases.filter(c => c.voucherStatus === VoucherStatus.PAID).length,
+      'Paid Retained Services': validCases.filter(c => c.voucherStatus === VoucherStatus.PAID && c.isRetainedServices).length,
       IntendNotToBill: validCases.filter(c => c.voucherStatus === VoucherStatus.INTEND_NOT_TO_BILL).length,
     };
 
@@ -848,16 +911,17 @@ const [savingProfile, setSavingProfile] = useState(false);
       highDutyDays,
       counts,
       totalSettlement,
+      retainedServicesRevenue,
       pendingRevenue,
       sortedActivities: validCases.flatMap(c => (c.activities || []).map(a => ({ ...a, defendantName: `${c.defendantLastName}, ${c.defendantFirstName}`, caseId: c.id }))).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 25)
     };
-  }, [dbCases, workloadByDate]);
+  }, [casesForCurrentUser, workloadByDate]);
 
   const uniqueAttorneys = useMemo(() => {
     const attys = new Set<string>();
-    dbCases.forEach(c => { if(c.attorneyName) attys.add(c.attorneyName); });
+    casesForCurrentUser.forEach(c => { if(c.attorneyName) attys.add(c.attorneyName); });
     return Array.from(attys).sort();
-  }, [dbCases]);
+  }, [casesForCurrentUser]);
 
   const sortedGlobalTasks = useMemo(() => {
     return [...globalTasks].sort((a, b) => {
@@ -878,7 +942,8 @@ const [savingProfile, setSavingProfile] = useState(false);
         dateOpened, dateClosed, attorneyName, defendantFirstName,
         defendantLastName, nextCourtDate, nextEventDescription,
         evidenceItems, dispositionNotes, activities, datePaid, amountPaid,
-        assigned_to, jurisdiction_id, communications, needsIntake
+        assigned_to, jurisdiction_id, communications, needsIntake,
+        isRetainedServices
       } = c;
 
       const payload = {
@@ -893,7 +958,8 @@ const [savingProfile, setSavingProfile] = useState(false);
         amountPaid: Number(amountPaid || 0),
         assigned_to: c.assigned_to ?? null,
         jurisdiction_id: jurisdiction_id ?? null,
-        needs_intake: !!needsIntake
+        needs_intake: !!needsIntake,
+        is_retained_services: !!isRetainedServices
       };
 
       const { error } = await supabase.from('cases').upsert(payload);
@@ -927,11 +993,14 @@ const [savingProfile, setSavingProfile] = useState(false);
 
   const handleNewCase = async () => {
     const newId = crypto.randomUUID();
+    const jurisdictionId = (myJurisdictionIds[0] ?? myJurisdictionId) ?? displayJurisdictions[0]?.id ?? null;
+    const assignedTo = !isAdmin && currentUserId ? currentUserId : null;
     const newCase: Case = { 
       id: newId, caseNumber: '', judgeName: '', voucherStatus: VoucherStatus.MISSING, status: CaseStatus.OPEN, 
       dateOpened: todayStr, attorneyName: '', defendantFirstName: '', defendantLastName: 'NEW CASE', 
       nextCourtDate: '', nextEventDescription: '', evidenceItems: [], activities: [], communications: [], 
-      dispositionNotes: '', amountPaid: 0, datePaid: '', jurisdiction_id: jurisdictions[0]?.id ?? null
+      dispositionNotes: '', amountPaid: 0, datePaid: '', jurisdiction_id: jurisdictionId, assigned_to: assignedTo,
+      isRetainedServices: false
     };
     setSelectedCaseId(newId);
     setDbCases(prev => [newCase, ...prev]);
@@ -1002,7 +1071,9 @@ const [savingProfile, setSavingProfile] = useState(false);
           communications: [],
           dispositionNotes: '',
           amountPaid: 0,
-          jurisdiction_id: jurisdictions[0]?.id ?? null
+          jurisdiction_id: (myJurisdictionIds[0] ?? myJurisdictionId) ?? displayJurisdictions[0]?.id ?? null,
+          assigned_to: !isAdmin && currentUserId ? currentUserId : null,
+          isRetainedServices: false
         };
         await persistCase(intakeCase);
         setIntakeText('');
@@ -1087,7 +1158,9 @@ const [savingProfile, setSavingProfile] = useState(false);
           dispositionNotes: '',
           amountPaid: 0,
           datePaid: '',
-          jurisdiction_id: jurisdictions[0]?.id ?? null,
+          jurisdiction_id: (myJurisdictionIds[0] ?? myJurisdictionId) ?? displayJurisdictions[0]?.id ?? null,
+          assigned_to: !isAdmin && currentUserId ? currentUserId : null,
+          isRetainedServices: false,
           needsIntake: true,
         };
         await persistCase(newCase);
@@ -1193,7 +1266,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   const currentCase = useMemo(() => selectedCaseId ? dbCases.find(c => c.id === selectedCaseId) : null, [selectedCaseId, dbCases]);
 
   const masterRegistryCases = useMemo(() => {
-    let filtered = dbCases.filter(c => {
+    let filtered = casesForCurrentUser.filter(c => {
       const search = registrySearch.toLowerCase();
       const nameMatch = `${c.defendantFirstName || ''} ${c.defendantLastName || ''}`.toLowerCase().includes(search);
       if (!nameMatch) return false;
@@ -1234,31 +1307,32 @@ const [savingProfile, setSavingProfile] = useState(false);
       if (caseSort === 'Date Opened') return new Date(a.dateOpened || 0).getTime() - new Date(b.dateOpened || 0).getTime();
       return 0;
     });
-  }, [dbCases, registrySearch, lifecycleFilter, caseSort]);
+  }, [casesForCurrentUser, registrySearch, lifecycleFilter, caseSort]);
 
   const registryCounts = useMemo(() => ({
-    Active: dbCases.filter(c => c.status !== CaseStatus.CLOSED).length,
-    Unscheduled: dbCases.filter(c => c.status !== CaseStatus.CLOSED && !c.nextCourtDate).length,
-    Archive: dbCases.filter(c => c.status === CaseStatus.CLOSED).length,
-  }), [dbCases]);
+    Active: casesForCurrentUser.filter(c => c.status !== CaseStatus.CLOSED).length,
+    Unscheduled: casesForCurrentUser.filter(c => c.status !== CaseStatus.CLOSED && !c.nextCourtDate).length,
+    Archive: casesForCurrentUser.filter(c => c.status === CaseStatus.CLOSED).length,
+  }), [casesForCurrentUser]);
 
   const taskFilterCounts = useMemo(() => ({
     Active: globalTasks.filter(t => !t.completed).length,
     Completed: globalTasks.filter(t => t.completed).length
   }), [globalTasks]);
 
-  // VOUCHER HUB SPECIFIC LOGIC
+  // VOUCHER HUB SPECIFIC LOGIC (investigator sees only their cases here too)
   const filteredVoucherCases = useMemo(() => {
-    let list = dbCases.filter(c => {
+    let list = casesForCurrentUser.filter(c => {
       if (voucherView === 'Missing') return c.status === CaseStatus.OPEN && c.voucherStatus === VoucherStatus.MISSING;
       if (voucherView === 'Pre-Audit') return c.status === CaseStatus.CLOSED && [VoucherStatus.MISSING, VoucherStatus.OPEN].includes(c.voucherStatus);
       if (voucherView === 'Submitted') return c.voucherStatus === VoucherStatus.SUBMITTED;
       if (voucherView === 'Paid') return c.voucherStatus === VoucherStatus.PAID;
+      if (voucherView === 'Paid Retained Services') return c.voucherStatus === VoucherStatus.PAID && c.isRetainedServices;
       if (voucherView === 'Intend Not to Bill') return c.voucherStatus === VoucherStatus.INTEND_NOT_TO_BILL;
       return true;
     });
 
-    if (voucherView === 'Paid') {
+    if (voucherView === 'Paid' || voucherView === 'Paid Retained Services') {
       if (voucherAttorneyFilter) list = list.filter(c => c.attorneyName === voucherAttorneyFilter);
       if (voucherTimeframe !== 'All') {
         const now = new Date();
@@ -1276,7 +1350,7 @@ const [savingProfile, setSavingProfile] = useState(false);
     }
 
     return list.sort((a,b) => (a.defendantLastName || '').localeCompare(b.defendantLastName || ''));
-  }, [dbCases, voucherView, voucherAttorneyFilter, voucherTimeframe]);
+  }, [casesForCurrentUser, voucherView, voucherAttorneyFilter, voucherTimeframe]);
 
   const voucherRevenueSecured = useMemo(() => {
     return filteredVoucherCases.reduce((s, c) => s + (c.amountPaid || 0), 0);
@@ -1417,6 +1491,9 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div>
                       <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Revenue Secured</p>
                       <p className="text-2xl font-black text-slate-900 mt-0.5">${dashboardAnalytics.totalSettlement.toLocaleString()}</p>
+                      {dashboardAnalytics.retainedServicesRevenue > 0 && (
+                        <p className="text-[9px] font-bold text-slate-500 mt-1">of which Retained Services: ${dashboardAnalytics.retainedServicesRevenue.toLocaleString()}</p>
+                      )}
                     </div>
                   </div>
                   <div 
@@ -1432,18 +1509,20 @@ const [savingProfile, setSavingProfile] = useState(false);
                 </div>
 
                 {/* Voucher Lifecycle Buttons */}
-                <div className="grid grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
                   {[
                     { label: 'Missing', count: dashboardAnalytics.counts.Missing, color: 'rose', icon: FileWarning, view: 'Missing' as VoucherSegment },
                     { label: 'Pre-Audit', count: dashboardAnalytics.counts['Pre-Audit'], color: 'amber', icon: ClipboardCheck, view: 'Pre-Audit' as VoucherSegment },
                     { label: 'Submitted', count: dashboardAnalytics.counts.Submitted, color: 'blue', icon: SendHorizontal, view: 'Submitted' as VoucherSegment },
-                    { label: 'Settled', count: dashboardAnalytics.counts.Paid, color: 'emerald', icon: BadgeCheck, view: 'Paid' as VoucherSegment }
+                    { label: 'Settled', count: dashboardAnalytics.counts.Paid, color: 'emerald', icon: BadgeCheck, view: 'Paid' as VoucherSegment },
+                    { label: 'Paid Retained', count: dashboardAnalytics.counts['Paid Retained Services'], color: 'violet', icon: BadgeCheck, view: 'Paid Retained Services' as VoucherSegment }
                   ].map((v) => {
                     const colorMap = {
                       rose: { text: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', hover: 'hover:border-rose-400' },
                       amber: { text: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', hover: 'hover:border-amber-400' },
                       blue: { text: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100', hover: 'hover:border-blue-400' },
-                      emerald: { text: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', hover: 'hover:border-emerald-400' }
+                      emerald: { text: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', hover: 'hover:border-emerald-400' },
+                      violet: { text: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100', hover: 'hover:border-violet-400' }
                     };
                     const c = colorMap[v.color as keyof typeof colorMap];
                     return (
@@ -1470,16 +1549,19 @@ const [savingProfile, setSavingProfile] = useState(false);
                   <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] px-2 flex items-center gap-3 shrink-0"><ShieldAlert size={16} className="text-rose-600"/> Risk Indicators</h3>
                   <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 pb-10">
                     
-                    {/* 1. Capacity Warning */}
+                    {/* 1. Capacity Warning (compact) — display only; link to Workload Log date was unreliable in this scroll area */}
                     {dashboardAnalytics.highDutyDays.length > 0 && dashboardAnalytics.highDutyDays.map(d => (
-                      <div key={d.date} className="p-6 bg-rose-600 text-white rounded-[32px] flex items-center justify-between shadow-xl border-4 border-white/20 animate-pulse shrink-0">
+                      <div
+                        key={d.date}
+                        className="p-3 bg-rose-600 text-white rounded-xl flex items-center justify-between shadow-md border border-white/20 animate-pulse shrink-0"
+                      >
                         <div className="flex flex-col">
-                          <span className="text-[11px] font-black uppercase tracking-widest leading-none">Capacity Warning</span>
-                          <span className="text-[8px] font-bold text-white/70 uppercase mt-1">Global Duty Exceeds 12h Protocol</span>
+                          <span className="text-[8px] font-black uppercase tracking-widest leading-none">Capacity Warning</span>
+                          <span className="text-[6px] font-bold text-white/70 uppercase mt-0.5">Global Duty Exceeds 12h Protocol</span>
                         </div>
                         <div className="flex flex-col items-end">
-                          <span className="text-xl font-black leading-none">{d.total.toFixed(1)} <span className="text-[10px]">H</span></span>
-                          <span className="text-[9px] font-bold uppercase mt-1">{displayDate(d.date)}</span>
+                          <span className="text-base font-black leading-none">{d.total.toFixed(1)} <span className="text-[7px]">H</span></span>
+                          <span className="text-[7px] font-bold uppercase mt-0.5">{displayDate(d.date)}</span>
                         </div>
                       </div>
                     ))}
@@ -1490,8 +1572,8 @@ const [savingProfile, setSavingProfile] = useState(false);
                         onClick={() => toggleAlert('evidence')}
                         className="w-full flex items-center justify-between group px-2 py-1 border-b border-orange-100 hover:bg-orange-50 transition-all"
                       >
-                        <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-2">
-                          Evidence Alert <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full text-[7px]">[{dashboardAnalytics.evidenceAlerts.length}]</span>
+                        <p className="text-[12px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-2">
+                          Evidence Alert <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.evidenceAlerts.length}]</span>
                         </p>
                         <ChevronDown size={14} className={`text-orange-400 transition-transform duration-300 ${collapsedAlerts.evidence ? '-rotate-90' : ''}`} />
                       </button>
@@ -1552,8 +1634,8 @@ const [savingProfile, setSavingProfile] = useState(false);
                         onClick={() => toggleAlert('urgent')}
                         className="w-full flex items-center justify-between group px-2 py-1 border-b border-indigo-100 hover:bg-indigo-50 transition-all"
                       >
-                        <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                          Urgent Pre-Trial <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full text-[7px]">[{dashboardAnalytics.urgentTrials.length}]</span>
+                        <p className="text-[12px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                          Urgent Pre-Trial <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.urgentTrials.length}]</span>
                         </p>
                         <ChevronDown size={14} className={`text-indigo-400 transition-transform duration-300 ${collapsedAlerts.urgent ? '-rotate-90' : ''}`} />
                       </button>
@@ -1583,8 +1665,8 @@ const [savingProfile, setSavingProfile] = useState(false);
                         onClick={() => toggleAlert('cold')}
                         className="w-full flex items-center justify-between group px-2 py-1 border-b border-indigo-50 hover:bg-indigo-50/50 transition-all"
                       >
-                        <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
-                          Cold Start Registry <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full text-[7px]">[{dashboardAnalytics.coldStarts.length}]</span>
+                        <p className="text-[12px] font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
+                          Cold Start Registry <span className="bg-indigo-100 text-indigo-600 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.coldStarts.length}]</span>
                         </p>
                         <ChevronDown size={14} className={`text-indigo-400 transition-transform duration-300 ${collapsedAlerts.cold ? '-rotate-90' : ''}`} />
                       </button>
@@ -1614,8 +1696,8 @@ const [savingProfile, setSavingProfile] = useState(false);
                         onClick={() => toggleAlert('stagnant')}
                         className="w-full flex items-center justify-between group px-2 py-1 border-b border-amber-100 hover:bg-amber-50 transition-all"
                       >
-                        <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
-                          Stagnant Cases <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[7px]">[{dashboardAnalytics.stagnantRisk.length}]</span>
+                        <p className="text-[12px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
+                          Stagnant Cases <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[14px] font-black">[{dashboardAnalytics.stagnantRisk.length}]</span>
                         </p>
                         <ChevronDown size={14} className={`text-amber-400 transition-transform duration-300 ${collapsedAlerts.stagnant ? '-rotate-90' : ''}`} />
                       </button>
@@ -2016,6 +2098,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                     { id: 'Pre-Audit', label: 'Pre-Audit', count: dashboardAnalytics.counts['Pre-Audit'] },
                     { id: 'Submitted', label: 'Submitted', count: dashboardAnalytics.counts.Submitted },
                     { id: 'Paid', label: 'Paid', count: dashboardAnalytics.counts.Paid },
+                    { id: 'Paid Retained Services', label: 'Paid Retained', count: dashboardAnalytics.counts['Paid Retained Services'] },
                     { id: 'Intend Not to Bill', label: 'Non-Billable', count: dashboardAnalytics.counts.IntendNotToBill }
                   ].map(v => (
                     <button 
@@ -2031,7 +2114,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                   ))}
                 </div>
 
-                {voucherView === 'Paid' && (
+                {(voucherView === 'Paid' || voucherView === 'Paid Retained Services') && (
                   <div className="flex items-center justify-between px-4 animate-in slide-in-from-top-2">
                     <div className="flex items-center gap-6">
                       <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-2 group hover:border-indigo-600 transition-all">
@@ -2070,7 +2153,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                       <th className="px-12 py-8 w-2/5 border-r border-white/5">Defendant / Case Number</th>
                       <th className="px-12 py-8 w-1/4 border-r border-white/5">Lead Attorney</th>
                       <th className="px-12 py-8 w-1/5 border-r border-white/5 text-center">
-                        {voucherView === 'Paid' ? 'Amount Paid' : 'Voucher Status'}
+                        {(voucherView === 'Paid' || voucherView === 'Paid Retained Services') ? 'Amount Paid' : 'Voucher Status'}
                       </th>
                       <th className="px-12 py-8 w-1/6 text-center">Audit Hours</th>
                     </tr>
@@ -2103,7 +2186,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                             </span>
                           </td>
                           <td className="px-12 py-8 text-center">
-                            {voucherView === 'Paid' ? (
+                            {(voucherView === 'Paid' || voucherView === 'Paid Retained Services') ? (
                               <div className="flex flex-col items-center">
                                 <span className="text-sm font-black text-emerald-600">${(c.amountPaid || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mt-1">Settled: {displayDate(c.datePaid)}</span>
@@ -2555,7 +2638,7 @@ const [savingProfile, setSavingProfile] = useState(false);
           activityCodes={activityCodes} 
           tasks={globalTasks}
           investigators={investigators}
-          jurisdictions={jurisdictions}
+          jurisdictions={displayJurisdictions}
           isAdmin={isAdmin}
           onUpdateTask={persistTask}
         />

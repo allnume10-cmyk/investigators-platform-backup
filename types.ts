@@ -119,4 +119,6 @@ export interface Case {
   amountPaid?: number;
   /** When true, case was created from Communication Hub; user should complete intake details. */
   needsIntake?: boolean;
+  /** When true, case is a retained services (outside referral); amount paid is set when marked Paid. */
+  isRetainedServices?: boolean;
 }
