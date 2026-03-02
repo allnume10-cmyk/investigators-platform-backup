@@ -1225,7 +1225,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       const summarizeCaseActivities = (acts: any[] | undefined): string => {
         const list = Array.isArray(acts) ? acts : [];
         if (list.length === 0) return 'No activity logged.';
-        const sorted = [...list].sort((a, b) => new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime());
+        const sorted = [...list].sort((a, b) => new Date(a?.date || 0).getTime() - new Date(b?.date || 0).getTime());
         const descriptions = sorted
           .map(a => (a?.description ? String(a.description).trim() : ''))
           .filter(Boolean);
