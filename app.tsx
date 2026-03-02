@@ -1222,6 +1222,22 @@ const [savingProfile, setSavingProfile] = useState(false);
     setIsGeneratingReport(true);
     setGeneratedReport(null);
     try {
+      const summarizeCaseActivities = (acts: any[] | undefined): string => {
+        const list = Array.isArray(acts) ? acts : [];
+        if (list.length === 0) return 'No activity logged.';
+        const sorted = [...list].sort((a, b) => new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime());
+        const descriptions = sorted
+          .map(a => (a?.description ? String(a.description).trim() : ''))
+          .filter(Boolean);
+        if (descriptions.length === 0) return 'No activity logged.';
+        const unique: string[] = [];
+        for (const d of descriptions) {
+          if (!unique.includes(d)) unique.push(d);
+          if (unique.length >= 8) break;
+        }
+        return unique.join(' ');
+      };
+
       let filtered = dbCases;
       if (selectedAttorneyFilter) filtered = dbCases.filter(c => c.attorneyName === selectedAttorneyFilter);
 
@@ -1233,7 +1249,14 @@ const [savingProfile, setSavingProfile] = useState(false);
           upcomingCourt: filtered.filter(c => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next7Str).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, event: c.nextEventDescription, date: c.nextCourtDate })),
           missingVoucher10Days: filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, assignedDate: c.dateOpened })),
           missingVoucherClosed: filtered.filter(c => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.MISSING).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber })),
-          remainingCases: filtered.filter(c => c.status === CaseStatus.OPEN && !(c.nextCourtDate && c.nextCourtDate <= next7Str)).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, activities: c.activities }))
+          // For the detailed activity section: narrative summary only (no dates, no hours).
+          remainingCases: filtered
+            .filter(c => c.status === CaseStatus.OPEN && !(c.nextCourtDate && c.nextCourtDate <= next7Str))
+            .map(c => ({
+              name: `${c.defendantLastName}, ${c.defendantFirstName}`,
+              caseNumber: c.caseNumber,
+              narrativeSummary: summarizeCaseActivities(c.activities)
+            }))
         };
       } else if (reportId === 'aged') {
         reportData = {

@@ -304,6 +304,11 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
         #### Missing Voucher on Closed Cases
         ### Detailed Activity of Remaining Active Cases
         Sign as Andrea, BRENT'S INVESTIGATE SERVICES, LLC"
+
+        For the section "### Detailed Activity of Remaining Active Cases":
+        - For each case, include ONLY: Defendant name, case number, and a narrative summary of activities.
+        - DO NOT include any activity dates.
+        - DO NOT include any time/hours.
       `;
     } else if (reportType === 'aged') {
       instruction = `
