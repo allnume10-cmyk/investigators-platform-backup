@@ -296,17 +296,30 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
     if (reportType === 'weekly') {
       instruction = `
         Generate a Weekly Status Report for BRENT'S INVESTIGATIVE SERVICES, LLC.
-        Strictly follow this template:
-        "Hello Attorney ${greetingName},
-        This is your weekly snapshot of active investigative matters.
-        ### Upcoming Court dates (next 7 days)
-        ### Cases with Missing Vouchers (Assigned 10+ days)
-        #### Missing Voucher on Closed Cases
-        ### Detailed Activity of Remaining Active Cases
-        Sign as Andrea, BRENT'S INVESTIGATE SERVICES, LLC"
+        Strictly follow this format (plain text; row-style lines intended for copying into Gmail):
 
-        For the section "### Detailed Activity of Remaining Active Cases":
-        - For each case, include ONLY: Defendant name, case number, and a narrative summary of activities.
+        Hello Attorney ${greetingName},
+        This is your weekly snapshot of active investigative matters assigned to Brent’s Investigative Services, LLC.
+
+        I. UPCOMING COURT DATES (Next 7 Days)
+        Defendant\tCase Number\tCourt Event\tCourt Date
+        <one row per case, or write: None at this time.>
+
+        II. CASES WITH MISSING VOUCHERS (Assigned 10+ Days)
+        Defendant\tCase Number\tDate Assigned
+        <one row per case, or write: None at this time.>
+
+        Missing Voucher on Closed Cases
+        <list as: Defendant\tCase Number, or write: None at this time.>
+
+        III. DETAILED ACTIVITY – REMAINING ACTIVE CASES
+        Defendant\tCase Number\tActivity Summary
+        <one row per case; activity summary must be narrative text only>
+
+        Sign as Andrea, BRENT'S INVESTIGATE SERVICES, LLC
+
+        CRITICAL RULES FOR SECTION III:
+        - Use the provided narrative summary field (if present) or otherwise summarize descriptions only.
         - DO NOT include any activity dates.
         - DO NOT include any time/hours.
       `;
