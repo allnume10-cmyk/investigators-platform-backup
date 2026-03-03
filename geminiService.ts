@@ -296,23 +296,29 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
     if (reportType === 'weekly') {
       instruction = `
         Generate a Weekly Status Report for BRENT'S INVESTIGATIVE SERVICES, LLC.
-        Strictly follow this format (plain text; row-style lines intended for copying into Gmail):
+        Strictly follow this format (plain text; row-style lines intended for copying into Gmail).
+        Use all dates in mm/dd/yyyy format. The provided data is already sorted and formatted; output rows in the same order.
 
         Hello Attorney ${greetingName},
         This is your weekly snapshot of active investigative matters assigned to Brent’s Investigative Services, LLC.
 
         I. UPCOMING COURT DATES (Next 7 Days)
+        List in chronological order from earliest to latest court date.
         Defendant\tCase Number\tCourt Event\tCourt Date
         <one row per case, or write: None at this time.>
 
         II. CASES WITH MISSING VOUCHERS (Assigned 10+ Days)
+        List in date order from oldest to newest (by date assigned).
         Defendant\tCase Number\tDate Assigned
         <one row per case, or write: None at this time.>
 
         Missing Voucher on Closed Cases
-        <list as: Defendant\tCase Number, or write: None at this time.>
+        List from oldest date closed to newest. Use Date Closed only (no disposition or activity summary).
+        Defendant\tCase Number\tDate Closed
+        <one row per case, or write: None at this time.>
 
         III. DETAILED ACTIVITY – REMAINING ACTIVE CASES
+        List in ascending alphabetical order by defendant's last name (A–Z).
         Defendant\tCase Number\tActivity Summary
         <one row per case; activity summary must be narrative text only>
 

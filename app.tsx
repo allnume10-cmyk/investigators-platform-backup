@@ -1222,6 +1222,16 @@ const [savingProfile, setSavingProfile] = useState(false);
     setIsGeneratingReport(true);
     setGeneratedReport(null);
     try {
+      const toMMDDYYYY = (dateStr: string | undefined): string => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        return `${mm}/${dd}/${yyyy}`;
+      };
+
       const summarizeCaseActivities = (acts: any[] | undefined): string => {
         const list = Array.isArray(acts) ? acts : [];
         if (list.length === 0) return 'No activity logged.';
@@ -1245,18 +1255,27 @@ const [savingProfile, setSavingProfile] = useState(false);
       if (reportId === 'weekly') {
         const next7 = new Date(); next7.setDate(next7.getDate() + 7);
         const next7Str = next7.toLocaleDateString('en-CA');
+        const upcomingList = filtered.filter(c => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next7Str);
+        upcomingList.sort((a, b) => new Date(a.nextCourtDate).getTime() - new Date(b.nextCourtDate).getTime());
+        const missing10List = filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 10);
+        missing10List.sort((a, b) => new Date(a.dateOpened || 0).getTime() - new Date(b.dateOpened || 0).getTime());
+        const missingClosedList = filtered.filter(c => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.MISSING);
+        missingClosedList.sort((a, b) => new Date(a.dateClosed || 0).getTime() - new Date(b.dateClosed || 0).getTime());
+        const remainingList = filtered
+          .filter(c => c.status === CaseStatus.OPEN && !(c.nextCourtDate && c.nextCourtDate <= next7Str))
+          .map(c => ({
+            name: `${c.defendantLastName}, ${c.defendantFirstName}`,
+            lastName: (c.defendantLastName || '').toLowerCase(),
+            caseNumber: c.caseNumber,
+            narrativeSummary: summarizeCaseActivities(c.activities)
+          }));
+        remainingList.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+
         reportData = {
-          upcomingCourt: filtered.filter(c => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next7Str).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, event: c.nextEventDescription, date: c.nextCourtDate })),
-          missingVoucher10Days: filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, assignedDate: c.dateOpened })),
-          missingVoucherClosed: filtered.filter(c => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.MISSING).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber })),
-          // For the detailed activity section: narrative summary only (no dates, no hours).
-          remainingCases: filtered
-            .filter(c => c.status === CaseStatus.OPEN && !(c.nextCourtDate && c.nextCourtDate <= next7Str))
-            .map(c => ({
-              name: `${c.defendantLastName}, ${c.defendantFirstName}`,
-              caseNumber: c.caseNumber,
-              narrativeSummary: summarizeCaseActivities(c.activities)
-            }))
+          upcomingCourt: upcomingList.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, event: c.nextEventDescription, date: toMMDDYYYY(c.nextCourtDate) })),
+          missingVoucher10Days: missing10List.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, assignedDate: toMMDDYYYY(c.dateOpened) })),
+          missingVoucherClosed: missingClosedList.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, dateClosed: toMMDDYYYY(c.dateClosed) })),
+          remainingCases: remainingList.map(({ lastName, ...r }) => r)
         };
       } else if (reportId === 'aged') {
         reportData = {
