@@ -287,6 +287,33 @@ export const draftInvestigativeEmail = async (requestType: string, caseContext: 
   });
 };
 
+export const generateCaseSummaries = async (cases: { name: string; caseNumber: string; narrativeSummary: string }[]): Promise<string[]> => {
+  if (!cases || cases.length === 0) return [];
+  return withRetry(async () => {
+    const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
+    const prompt = `You are writing brief activity summaries for a weekly status email to busy attorneys.
+For each case below, write a TIGHT 1–4 sentence professional summary. No repetitive language. Quick read.
+Use only the activity narrative provided; do not add dates or hours. Output a JSON array of strings only, one string per case in the same order. No other text.
+
+Cases (JSON):
+${JSON.stringify(cases)}
+
+Respond with only a JSON array of strings, e.g. ["First summary.", "Second summary."]`;
+    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+    const text = (response.text || '').trim();
+    try {
+      const parsed = JSON.parse(text.replace(/^```\w*\n?|\n?```$/g, '').trim()) as unknown;
+      if (Array.isArray(parsed)) {
+        const strings = parsed.filter((s): s is string => typeof s === 'string');
+        return cases.map((c, i) => strings[i] ?? (c.narrativeSummary || 'No activity logged.'));
+      }
+    } catch {
+      // ignore
+    }
+    return cases.map(c => c.narrativeSummary || 'No activity logged.');
+  });
+};
+
 export const generateAttorneyReport = async (reportType: string, attorneyName: string | null, data: any) => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
@@ -320,14 +347,14 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
         III. DETAILED ACTIVITY – REMAINING ACTIVE CASES
         List in ascending alphabetical order by defendant's last name (A–Z).
         Defendant\tCase Number\tActivity Summary
-        <one row per case; activity summary must be narrative text only>
+        <one row per case>
 
         Sign as Andrea, BRENT'S INVESTIGATE SERVICES, LLC
 
         CRITICAL RULES FOR SECTION III:
-        - Use the provided narrative summary field (if present) or otherwise summarize descriptions only.
-        - DO NOT include any activity dates.
-        - DO NOT include any time/hours.
+        - For each case, output a TIGHT 1–4 sentence professional summary. Quick read for busy attorneys.
+        - Use the provided narrative summary to write complete sentences. No repetitive language. Control email length.
+        - DO NOT include any activity dates or time/hours.
       `;
     } else if (reportType === 'aged') {
       instruction = `

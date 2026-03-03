@@ -28,7 +28,7 @@ import {
 } from './types';
 import { 
   parseBulkSpreadsheet, parseEmailToCase, draftInvestigativeEmail, processAudioToActivity,
-  generateAttorneyReport, generateGlobalIntelligenceBrief, matchCommunicationToCase,
+  generateAttorneyReport, generateCaseSummaries, generateGlobalIntelligenceBrief, matchCommunicationToCase,
   summarizeCommForLog
 } from './geminiService';
 import { supabase } from './supabase';
@@ -1276,13 +1276,20 @@ const [savingProfile, setSavingProfile] = useState(false);
         return `${mm}/${dd}/${yyyy}`;
       };
 
+      const isOpeningActivity = (desc: string): boolean => {
+        const lower = desc.toLowerCase();
+        return /\bopened case\b|\bopen(ed)? case\b|\breviewed discovery\b|\bgerstein\b|\bconsulted with atty\.?\b|\bconsulted with attorney\b|\bcase opened\b|\bintake\b|\breviewed gerstein\b/i.test(lower);
+      };
       const summarizeCaseActivities = (acts: any[] | undefined): string => {
         const list = Array.isArray(acts) ? acts : [];
         if (list.length === 0) return 'No activity logged.';
         const sorted = [...list].sort((a, b) => new Date(a?.date || 0).getTime() - new Date(b?.date || 0).getTime());
-        const descriptions = sorted
+        let descriptions = sorted
           .map(a => (a?.description ? String(a.description).trim() : ''))
           .filter(Boolean);
+        if (descriptions.length === 0) return 'No activity logged.';
+        const hasOther = descriptions.some(d => !isOpeningActivity(d));
+        if (hasOther) descriptions = descriptions.filter(d => !isOpeningActivity(d));
         if (descriptions.length === 0) return 'No activity logged.';
         const unique: string[] = [];
         for (const d of descriptions) {
@@ -1350,7 +1357,16 @@ const [savingProfile, setSavingProfile] = useState(false);
       }
 
       if (reportId === 'weekly' && weeklyReportFormat === 'html' && reportData.upcomingCourt !== undefined) {
-        setGeneratedReport(buildWeeklyReportHtml(reportData, selectedAttorneyFilter));
+        let remainingWithSummaries = reportData.remainingCases as { name: string; caseNumber: string; narrativeSummary: string }[];
+        if (remainingWithSummaries.length > 0) {
+          try {
+            const summaries = await generateCaseSummaries(remainingWithSummaries);
+            remainingWithSummaries = remainingWithSummaries.map((c, i) => ({ ...c, narrativeSummary: summaries[i] ?? c.narrativeSummary }));
+          } catch {
+            // keep original narrativeSummary on failure
+          }
+        }
+        setGeneratedReport(buildWeeklyReportHtml({ ...reportData, remainingCases: remainingWithSummaries }, selectedAttorneyFilter));
         setGeneratedReportIsHtml(true);
       } else {
         const result = (reportId === 'intel' && !selectedAttorneyFilter) ? await generateGlobalIntelligenceBrief(reportData) : await generateAttorneyReport(reportId, selectedAttorneyFilter, reportData);
