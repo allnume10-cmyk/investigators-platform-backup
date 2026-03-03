@@ -309,12 +309,12 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
 
         II. CASES WITH MISSING VOUCHERS (Assigned 10+ Days)
         List in date order from oldest to newest (by date assigned).
-        Defendant\tCase Number\tDate Assigned
+        Defendant\tCase Number\tJudge's Name\tDate Assigned
         <one row per case, or write: None at this time.>
 
         Missing Voucher on Closed Cases
         List from oldest date closed to newest. Use Date Closed only (no disposition or activity summary).
-        Defendant\tCase Number\tDate Closed
+        Defendant\tCase Number\tJudge's Name\tDate Closed
         <one row per case, or write: None at this time.>
 
         III. DETAILED ACTIVITY – REMAINING ACTIVE CASES

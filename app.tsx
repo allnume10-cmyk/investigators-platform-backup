@@ -1279,8 +1279,8 @@ const [savingProfile, setSavingProfile] = useState(false);
 
         reportData = {
           upcomingCourt: upcomingList.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, event: c.nextEventDescription, date: toMMDDYYYY(c.nextCourtDate) })),
-          missingVoucher10Days: missing10List.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, assignedDate: toMMDDYYYY(c.dateOpened) })),
-          missingVoucherClosed: missingClosedList.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, dateClosed: toMMDDYYYY(c.dateClosed) })),
+          missingVoucher10Days: missing10List.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, judgeName: c.judgeName ?? '', assignedDate: toMMDDYYYY(c.dateOpened) })),
+          missingVoucherClosed: missingClosedList.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, judgeName: c.judgeName ?? '', dateClosed: toMMDDYYYY(c.dateClosed) })),
           remainingCases: remainingList.map(({ lastName, ...r }) => r)
         };
       } else if (reportId === 'aged') {
