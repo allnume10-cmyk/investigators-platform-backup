@@ -650,6 +650,8 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [selectedAttorneyFilter, setSelectedAttorneyFilter] = useState<string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string>('weekly');
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
+  const [generatedReportIsHtml, setGeneratedReportIsHtml] = useState(false);
+  const [weeklyReportFormat, setWeeklyReportFormat] = useState<'plain' | 'html'>('plain');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Global Tasks state
@@ -1218,6 +1220,42 @@ const [savingProfile, setSavingProfile] = useState(false);
     }
   };
 
+  const buildWeeklyReportHtml = (data: { upcomingCourt: any[]; missingVoucher10Days: any[]; missingVoucherClosed: any[]; remainingCases: any[] }, attorneyName: string | null): string => {
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const lastName = attorneyName ? (() => { const part = attorneyName.split(',')[0].trim(); const words = part.split(/\s+/); return words[words.length - 1] || attorneyName; })() : '';
+    const greeting = lastName ? `Hi Attorney ${esc(lastName)}` : 'Hi Counsel';
+    const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
+    const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
+    const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
+
+    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+      const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
+      const body = rows.length === 0
+        ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None at this time.</td></tr></tbody>`
+        : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      return `<h3 style="margin: 1.25rem 0 0.5rem; font-size: 14px;">${esc(title)}</h3><table style="${tableStyle}">${thead}${body}</table>`;
+    };
+
+    const parts: string[] = [
+      `<p style="margin: 0 0 1rem;">${greeting},</p>`,
+      `<p style="margin: 0 0 1rem;">This is your weekly snapshot of active investigative matters assigned to Brent's Investigative Services, LLC.</p>`,
+      section('I. UPCOMING COURT DATES (Next 7 Days)', ['Defendant', 'Case Number', 'Court Event', 'Court Date'],
+        data.upcomingCourt.map(c => ({ Defendant: c.name, 'Case Number': c.caseNumber, 'Court Event': c.event ?? '', 'Court Date': c.date ?? '' }))),
+      section('II. CASES WITH MISSING VOUCHERS (Assigned 10+ Days)', ['Defendant', 'Case Number', "Judge's Name", 'Date Assigned'],
+        data.missingVoucher10Days.map(c => ({ Defendant: c.name, 'Case Number': c.caseNumber, "Judge's Name": c.judgeName ?? '', 'Date Assigned': c.assignedDate ?? '' }))),
+      section('Missing Voucher on Closed Cases', ['Defendant', 'Case Number', "Judge's Name", 'Date Closed'],
+        data.missingVoucherClosed.map(c => ({ Defendant: c.name, 'Case Number': c.caseNumber, "Judge's Name": c.judgeName ?? '', 'Date Closed': c.dateClosed ?? '' }))),
+      section('III. DETAILED ACTIVITY – REMAINING ACTIVE CASES', ['Defendant', 'Case Number', 'Activity Summary'],
+        data.remainingCases.map(c => ({ Defendant: c.name, 'Case Number': c.caseNumber, 'Activity Summary': c.narrativeSummary ?? '' }))),
+      `<h3 style="margin: 1.5rem 0 0.5rem; font-size: 14px;">Need Additional Investigative Services?</h3>`,
+      `<p style="margin: 0 0 1rem;">If you require additional investigative services, please reply directly to this email with the case number and defendant name, and we will follow up promptly.</p>`,
+      `<p style="margin: 1.25rem 0 0.25rem;">Thank you,</p>`,
+      `<p style="margin: 0;">Andrea</p>`,
+      `<p style="margin: 0;">Brent's Investigative Services</p>`
+    ];
+    return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
+  };
+
   const handleExecuteReport = async (reportId: string) => {
     setIsGeneratingReport(true);
     setGeneratedReport(null);
@@ -1311,8 +1349,14 @@ const [savingProfile, setSavingProfile] = useState(false);
         reportData = { activeMattersCount: filtered.filter(c => c.status === CaseStatus.OPEN).length, urgentActionCount: filtered.filter(c => c.nextCourtDate && calculateDaysDiff(c.nextCourtDate) >= -7).length, totalSettlement: filtered.filter(c => c.voucherStatus === VoucherStatus.PAID).reduce((s, c) => s + (c.amountPaid || 0), 0) };
       }
 
-      let result = (reportId === 'intel' && !selectedAttorneyFilter) ? await generateGlobalIntelligenceBrief(reportData) : await generateAttorneyReport(reportId, selectedAttorneyFilter, reportData);
-      setGeneratedReport(result);
+      if (reportId === 'weekly' && weeklyReportFormat === 'html' && reportData.upcomingCourt !== undefined) {
+        setGeneratedReport(buildWeeklyReportHtml(reportData, selectedAttorneyFilter));
+        setGeneratedReportIsHtml(true);
+      } else {
+        const result = (reportId === 'intel' && !selectedAttorneyFilter) ? await generateGlobalIntelligenceBrief(reportData) : await generateAttorneyReport(reportId, selectedAttorneyFilter, reportData);
+        setGeneratedReport(result);
+        setGeneratedReportIsHtml(false);
+      }
     } catch (e) { alert("Report synthesis failed."); } finally { setIsGeneratingReport(false); }
   };
 
@@ -2321,6 +2365,27 @@ const [savingProfile, setSavingProfile] = useState(false);
                         </div>
                       ))}
                     </div>
+                    {selectedReportId === 'weekly' && (
+                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                        <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Output format</p>
+                        <div className="flex rounded-xl bg-white p-1 border border-slate-100 shadow-inner">
+                          <button
+                            type="button"
+                            onClick={() => setWeeklyReportFormat('plain')}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${weeklyReportFormat === 'plain' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                          >
+                            Plain text
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWeeklyReportFormat('html')}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${weeklyReportFormat === 'html' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                          >
+                            HTML (tables)
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <button 
                       onClick={() => handleExecuteReport(selectedReportId)}
                       disabled={isGeneratingReport}
@@ -2346,15 +2411,41 @@ const [savingProfile, setSavingProfile] = useState(false);
                       {generatedReport ? (
                         <div className="animate-in fade-in slide-in-from-bottom-4 flex flex-col h-full">
                           <div className="flex-1 overflow-y-auto custom-scrollbar prose prose-slate max-w-none">
-                            <div className="whitespace-pre-wrap font-medium text-slate-600 leading-relaxed text-sm">
-                              {generatedReport}
-                            </div>
+                            {generatedReportIsHtml ? (
+                              <div className="font-medium text-slate-600 leading-relaxed text-sm [&_table]:min-w-[480px]" dangerouslySetInnerHTML={{ __html: generatedReport }} />
+                            ) : (
+                              <div className="whitespace-pre-wrap font-medium text-slate-600 leading-relaxed text-sm">
+                                {generatedReport}
+                              </div>
+                            )}
                           </div>
-                          <footer className="mt-10 pt-8 border-t border-slate-50 flex justify-between items-center shrink-0 bg-white">
+                          <footer className="mt-10 pt-8 border-t border-slate-50 flex justify-between items-center shrink-0 bg-white flex-wrap gap-2">
                             <button onClick={() => setGeneratedReport(null)} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-rose-600 transition-all">Discard Draft</button>
-                            <button onClick={() => window.print()} className="px-8 py-3 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center gap-3">
-                              <Download size={16}/> Export PDF
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    if (generatedReportIsHtml && generatedReport) {
+                                      const htmlBlob = new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${generatedReport}</body></html>`], { type: 'text/html; charset=utf-8' });
+                                      const plainBlob = new Blob([generatedReport.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()], { type: 'text/plain; charset=utf-8' });
+                                      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': plainBlob })]);
+                                      alert('Formatted report copied. Paste into Gmail to keep tables and formatting.');
+                                    } else {
+                                      await navigator.clipboard.writeText(generatedReport ?? '');
+                                      alert('Copied to clipboard. Paste into Gmail or another email.');
+                                    }
+                                  } catch {
+                                    alert('Copy failed. Try selecting the report above and copying manually (Ctrl/Cmd+A in the box, then Ctrl/Cmd+C).');
+                                  }
+                                }}
+                                className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all flex items-center gap-2"
+                              >
+                                {generatedReportIsHtml ? 'Copy formatted (for Gmail)' : 'Copy text'}
+                              </button>
+                              <button onClick={() => window.print()} className="px-8 py-3 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center gap-3">
+                                <Download size={16}/> Export PDF
+                              </button>
+                            </div>
                           </footer>
                         </div>
                       ) : !isGeneratingReport && (
