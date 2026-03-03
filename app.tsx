@@ -1224,6 +1224,12 @@ const [savingProfile, setSavingProfile] = useState(false);
     try {
       const toMMDDYYYY = (dateStr: string | undefined): string => {
         if (!dateStr) return '';
+        // Parse YYYY-MM-DD as calendar date only (avoid UTC midnight shifting day in local TZ)
+        const match = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+          const [, yyyy, mm, dd] = match;
+          return `${mm}/${dd}/${yyyy}`;
+        }
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return dateStr;
         const mm = String(d.getMonth() + 1).padStart(2, '0');
