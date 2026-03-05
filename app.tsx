@@ -1391,7 +1391,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       if (!nameMatch) return false;
       if (lifecycleFilter === 'Active') return c.status !== CaseStatus.CLOSED;
       if (lifecycleFilter === 'Unscheduled') return c.status !== CaseStatus.CLOSED && !c.nextCourtDate;
-      if (lifecycleFilter === 'Archive') return c.status === CaseStatus.CLOSED;
+      if (lifecycleFilter === 'Archive') return c.status === CaseStatus.CLOSED && (c.voucherStatus === VoucherStatus.PAID || c.voucherStatus === VoucherStatus.INTEND_NOT_TO_BILL);
       return true;
     });
 
@@ -1431,7 +1431,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   const registryCounts = useMemo(() => ({
     Active: casesForCurrentUser.filter(c => c.status !== CaseStatus.CLOSED).length,
     Unscheduled: casesForCurrentUser.filter(c => c.status !== CaseStatus.CLOSED && !c.nextCourtDate).length,
-    Archive: casesForCurrentUser.filter(c => c.status === CaseStatus.CLOSED).length,
+    Archive: casesForCurrentUser.filter(c => c.status === CaseStatus.CLOSED && (c.voucherStatus === VoucherStatus.PAID || c.voucherStatus === VoucherStatus.INTEND_NOT_TO_BILL)).length,
   }), [casesForCurrentUser]);
 
   const taskFilterCounts = useMemo(() => ({
