@@ -359,13 +359,23 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
     } else if (reportType === 'aged') {
       instruction = `
         INVESTIGATIVE AGED VOUCHER AUDIT
-        
-        Section #1 Heading must be exactly:
-        "The following cases have been assigned to us for over 90 days without voucher submission. These require your immediate attention."
-        
-        List cases with assigned dates > 90 days first. Then list 60-day and 30-day brackets.
-        Format professionally for attorney ${greetingName}.
-        Sign: Andrea, BRENT'S INVESTIGATE SERVICES, LLC.
+        Use all dates in mm/dd/yyyy format. The provided data is already sorted and formatted; output rows in the same order.
+
+        Greet attorney ${greetingName}. Brief intro that this is the Aged Voucher Audit for Brent's Investigative Services, LLC.
+
+        Section 1: Cases assigned 90+ days without voucher submission (immediate attention).
+        Defendant\tCase Number\tJudge's Name\tDate Assigned
+        <one row per case, or: None at this time.>
+
+        Section 2: Cases assigned 60–89 days without voucher submission.
+        Defendant\tCase Number\tJudge's Name\tDate Assigned
+        <one row per case, or: None at this time.>
+
+        Section 3: Cases assigned 30–59 days without voucher submission.
+        Defendant\tCase Number\tJudge's Name\tDate Assigned
+        <one row per case, or: None at this time.>
+
+        Sign: Thank you, Andrea, BRENT'S INVESTIGATIVE SERVICES, LLC.
       `;
     } else if (reportType === 'aging') {
       instruction = `

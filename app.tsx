@@ -652,6 +652,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
   const [generatedReportIsHtml, setGeneratedReportIsHtml] = useState(false);
   const [weeklyReportFormat, setWeeklyReportFormat] = useState<'plain' | 'html'>('plain');
+  const [agedReportFormat, setAgedReportFormat] = useState<'plain' | 'html'>('plain');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Global Tasks state
@@ -1256,6 +1257,37 @@ const [savingProfile, setSavingProfile] = useState(false);
     return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
   };
 
+  const buildAgedReportHtml = (data: { unbilled90: any[]; unbilled60: any[]; unbilled30: any[] }, attorneyName: string | null): string => {
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const lastName = attorneyName ? (() => { const part = attorneyName.split(',')[0].trim(); const words = part.split(/\s+/); return words[words.length - 1] || attorneyName; })() : '';
+    const greeting = lastName ? `Hi Attorney ${esc(lastName)}` : 'Hi Counsel';
+    const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
+    const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
+    const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
+
+    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+      const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
+      const body = rows.length === 0
+        ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None at this time.</td></tr></tbody>`
+        : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      return `<h3 style="margin: 1.25rem 0 0.5rem; font-size: 14px;">${esc(title)}</h3><table style="${tableStyle}">${thead}${body}</table>`;
+    };
+
+    const row = (c: any) => ({ Defendant: c.name, 'Case Number': c.ref ?? c.caseNumber ?? '', "Judge's Name": c.judgeName ?? '', 'Date Assigned': c.assigned ?? '' });
+    const parts: string[] = [
+      `<p style="margin: 0 0 1rem;">${greeting},</p>`,
+      `<p style="margin: 0 0 1rem;">Below is the Investigative Aged Voucher Audit for matters assigned to Brent's Investigative Services, LLC.</p>`,
+      section('Cases assigned 90+ days without voucher submission (immediate attention)', ['Defendant', 'Case Number', "Judge's Name", 'Date Assigned'], data.unbilled90.map(row)),
+      section('Cases assigned 60–89 days without voucher submission', ['Defendant', 'Case Number', "Judge's Name", 'Date Assigned'], data.unbilled60.map(row)),
+      section('Cases assigned 30–59 days without voucher submission', ['Defendant', 'Case Number', "Judge's Name", 'Date Assigned'], data.unbilled30.map(row)),
+      `<p style="margin: 1.5rem 0 1rem;">Please let us know if additional information is needed.</p>`,
+      `<p style="margin: 1.25rem 0 0.25rem;">Thank you,</p>`,
+      `<p style="margin: 0;">Andrea</p>`,
+      `<p style="margin: 0;">Brent's Investigative Services</p>`
+    ];
+    return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
+  };
+
   const handleExecuteReport = async (reportId: string) => {
     setIsGeneratingReport(true);
     setGeneratedReport(null);
@@ -1329,10 +1361,16 @@ const [savingProfile, setSavingProfile] = useState(false);
           remainingCases: remainingList.map(({ lastName, ...r }) => r)
         };
       } else if (reportId === 'aged') {
+        const aged90 = filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 90);
+        const aged60 = filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 60 && calculateDaysDiff(c.dateOpened) < 90);
+        const aged30 = filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 30 && calculateDaysDiff(c.dateOpened) < 60);
+        aged90.sort((a, b) => new Date(a.dateOpened || 0).getTime() - new Date(b.dateOpened || 0).getTime());
+        aged60.sort((a, b) => new Date(a.dateOpened || 0).getTime() - new Date(b.dateOpened || 0).getTime());
+        aged30.sort((a, b) => new Date(a.dateOpened || 0).getTime() - new Date(b.dateOpened || 0).getTime());
         reportData = {
-          unbilled90: filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, ref: c.caseNumber, assigned: c.dateOpened })),
-          unbilled60: filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 60 && calculateDaysDiff(c.dateOpened) < 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, ref: c.caseNumber, assigned: c.dateOpened })),
-          unbilled30: filtered.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 30 && calculateDaysDiff(c.dateOpened) < 60).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, ref: c.caseNumber, assigned: c.dateOpened }))
+          unbilled90: aged90.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, ref: c.caseNumber, judgeName: c.judgeName ?? '', assigned: toMMDDYYYY(c.dateOpened) })),
+          unbilled60: aged60.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, ref: c.caseNumber, judgeName: c.judgeName ?? '', assigned: toMMDDYYYY(c.dateOpened) })),
+          unbilled30: aged30.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, ref: c.caseNumber, judgeName: c.judgeName ?? '', assigned: toMMDDYYYY(c.dateOpened) }))
         };
       } else if (reportId === 'aging') {
         reportData = {
@@ -1367,6 +1405,9 @@ const [savingProfile, setSavingProfile] = useState(false);
           }
         }
         setGeneratedReport(buildWeeklyReportHtml({ ...reportData, remainingCases: remainingWithSummaries }, selectedAttorneyFilter));
+        setGeneratedReportIsHtml(true);
+      } else if (reportId === 'aged' && agedReportFormat === 'html' && reportData.unbilled90 !== undefined) {
+        setGeneratedReport(buildAgedReportHtml(reportData, selectedAttorneyFilter));
         setGeneratedReportIsHtml(true);
       } else {
         const result = (reportId === 'intel' && !selectedAttorneyFilter) ? await generateGlobalIntelligenceBrief(reportData) : await generateAttorneyReport(reportId, selectedAttorneyFilter, reportData);
@@ -2381,21 +2422,21 @@ const [savingProfile, setSavingProfile] = useState(false);
                         </div>
                       ))}
                     </div>
-                    {selectedReportId === 'weekly' && (
+                    {(selectedReportId === 'weekly' || selectedReportId === 'aged') && (
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
                         <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Output format</p>
                         <div className="flex rounded-xl bg-white p-1 border border-slate-100 shadow-inner">
                           <button
                             type="button"
-                            onClick={() => setWeeklyReportFormat('plain')}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${weeklyReportFormat === 'plain' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : agedReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             Plain text
                           </button>
                           <button
                             type="button"
-                            onClick={() => setWeeklyReportFormat('html')}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${weeklyReportFormat === 'html' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : agedReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             HTML (tables)
                           </button>
