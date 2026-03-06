@@ -1289,6 +1289,10 @@ const [savingProfile, setSavingProfile] = useState(false);
   };
 
   const handleExecuteReport = async (reportId: string) => {
+    if (reportId === 'intel' && !isAdmin) {
+      setIsGeneratingReport(false);
+      return;
+    }
     setIsGeneratingReport(true);
     setGeneratedReport(null);
     try {
@@ -2407,7 +2411,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                         { id: 'aging', label: 'Case Aging & Velocity', icon: History, color: 'blue', desc: 'Analysis of dossier processing speed from intake to resolution.' },
                         { id: 'stagnant', label: 'Stagnant Advisory', icon: Snowflake, color: 'amber', desc: 'Critical warning for dossiers with zero activity in 45+ days.' },
                         { id: 'pretrial', label: 'Pre-Trial Readiness', icon: Target, color: 'emerald', desc: 'Strategic preparation status for upcoming trial dates.' },
-                        { id: 'intel', label: 'Global Intel Brief', icon: Sparkles, color: 'indigo', desc: 'AI-generated operational synthesis for management.' }
+                        ...(isAdmin ? [{ id: 'intel', label: 'Global Intel Brief', icon: Sparkles, color: 'indigo', desc: 'AI-generated operational synthesis for management.' }] : [])
                       ].map(r => (
                         <div 
                           key={r.id} 
