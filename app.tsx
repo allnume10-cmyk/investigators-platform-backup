@@ -653,6 +653,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [generatedReportIsHtml, setGeneratedReportIsHtml] = useState(false);
   const [weeklyReportFormat, setWeeklyReportFormat] = useState<'plain' | 'html'>('plain');
   const [agedReportFormat, setAgedReportFormat] = useState<'plain' | 'html'>('plain');
+  const [intelReportFormat, setIntelReportFormat] = useState<'plain' | 'html'>('plain');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Global Tasks state
@@ -1288,6 +1289,45 @@ const [savingProfile, setSavingProfile] = useState(false);
     return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
   };
 
+  const buildIntelReportHtml = (data: any): string => {
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
+    const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
+    const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
+
+    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+      const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
+      const body = rows.length === 0
+        ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None at this time.</td></tr></tbody>`
+        : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      return `<h3 style="margin: 1.25rem 0 0.5rem; font-size: 14px;">${esc(title)}</h3><table style="${tableStyle}">${thead}${body}</table>`;
+    };
+
+    const s = data.snapshot || {};
+    const t = data.tasks || {};
+    const st = data.stagnant || {};
+    const v = data.vouchers || {};
+    const n = data.newCases || {};
+    const c = data.court || {};
+
+    const parts: string[] = [
+      `<h2 style="margin: 0 0 0.5rem; font-size: 16px;">Global Intel Brief</h2>`,
+      `<p style="margin: 0 0 1rem;">Scope: ${esc(s.attorneyFilter)}. Active matters: ${s.activeMattersCount ?? 0}. Total paid revenue: $${Number(s.totalPaidRevenue || 0).toLocaleString()}. Paid this month: $${Number(s.paidThisMonth || 0).toLocaleString()}.</p>`,
+      section('Outstanding tasks – cases with most open/overdue tasks', ['Defendant', 'Case Number', 'Attorney', 'Open Tasks', 'Overdue', 'Oldest Overdue'],
+        (t.casesWithMostOpenTasks || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Open Tasks': String(r.openTaskCount ?? ''), Overdue: String(r.overdueTaskCount ?? ''), 'Oldest Overdue': r.oldestOverdueDate ?? '' }))),
+      section('Stagnant cases (no activity 45+ days)', ['Defendant', 'Case Number', 'Attorney', 'Last Activity', 'Days Since'],
+        (st.cases || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Last Activity': r.lastActivity ?? '', 'Days Since': String(r.daysSince ?? '') }))),
+      section('Missing voucher 90+ days', ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], (v.missing90Plus || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
+      section('Missing voucher 60–89 days', ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], (v.missing60to89 || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
+      section('Missing voucher 30–59 days', ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], (v.missing30to59 || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
+      section('Pre-audit (closed, open voucher – bill for payment)', ['Defendant', 'Case Number', 'Attorney', 'Date Closed'], (v.preAuditOpenVoucher || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Date Closed': r.dateClosed ?? '' }))),
+      section('New cases not touched (opened last 14 days, 0–1 activity)', ['Defendant', 'Case Number', 'Attorney', 'Date Opened'], (n.notTouched || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Date Opened': r.dateOpened ?? '' }))),
+      section('Trial/readiness in next 30 days – no recent activity', ['Defendant', 'Case Number', 'Attorney', 'Event', 'Court Date', 'Open Tasks'], (c.trialReadinessNext30DaysNoActivityList || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', Event: r.event ?? '', 'Court Date': r.courtDate ?? '', 'Open Tasks': String(r.openTasks ?? '') }))),
+      `<p style="margin: 1.5rem 0 0.25rem;">Andrea, BRENT'S INVESTIGATIVE SERVICES, LLC</p>`
+    ];
+    return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 800px;">${parts.join('')}</div>`;
+  };
+
   const handleExecuteReport = async (reportId: string) => {
     if (reportId === 'intel' && !isAdmin) {
       setIsGeneratingReport(false);
@@ -1409,15 +1449,40 @@ const [savingProfile, setSavingProfile] = useState(false);
         const newCasesNotTouched = newCasesOpened.filter(c => (c.activities || []).length <= 1);
         const next7 = new Date(); next7.setDate(next7.getDate() + 7);
         const next7Str = next7.toLocaleDateString('en-CA');
+        const next30 = new Date(); next30.setDate(next30.getDate() + 30);
+        const next30Str = next30.toLocaleDateString('en-CA');
         const trialReadiness = openCases.filter(c => /TRIAL|READINESS/i.test(c.nextEventDescription || ''));
-        const trialWithNoRecentActivity = trialReadiness.filter(c => {
+        const trialReadinessNext30Days = trialReadiness.filter(c => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next30Str);
+        const trialReadinessNext30DaysNoActivity = trialReadinessNext30Days.filter(c => {
           const last = getLastActivityDate(c);
           return calculateDaysDiff(last) > 7;
         });
         const startOfMonth = new Date(); startOfMonth.setDate(1);
         const monthStr = startOfMonth.toLocaleDateString('en-CA').slice(0, 7);
         const paidThisMonth = filtered.filter((c: Case) => c.voucherStatus === VoucherStatus.PAID && (c.datePaid || '').slice(0, 7) === monthStr).reduce((s: number, c: Case) => s + (c.amountPaid || 0), 0);
-        const casesByOpenTasks = openCases.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, openTaskCount: tasksInScope.filter(t => t.caseId === c.id && !t.completed).length })).filter(x => x.openTaskCount > 0).sort((a, b) => b.openTaskCount - a.openTaskCount).slice(0, 10);
+        const casesByOpenTasks = openCases
+          .map(c => {
+            const openTasks = tasksInScope.filter(t => t.caseId === c.id && !t.completed);
+            const overdueTasks = openTasks.filter(t => t.dueDate < todayStr);
+            const oldestOverdueRaw = overdueTasks.length > 0 ? overdueTasks.map(t => t.dueDate).sort()[0] : null;
+            return {
+              name: `${c.defendantLastName}, ${c.defendantFirstName}`,
+              caseNumber: c.caseNumber,
+              attorneyName: c.attorneyName ?? '',
+              openTaskCount: openTasks.length,
+              overdueTaskCount: overdueTasks.length,
+              oldestOverdueRaw
+            };
+          })
+          .filter(x => x.openTaskCount > 0)
+          .sort((a, b) => {
+            if (b.overdueTaskCount !== a.overdueTaskCount) return b.overdueTaskCount - a.overdueTaskCount;
+            const aDate = a.oldestOverdueRaw ?? '9999-12-31';
+            const bDate = b.oldestOverdueRaw ?? '9999-12-31';
+            return aDate.localeCompare(bDate);
+          })
+          .map(({ oldestOverdueRaw, ...r }) => ({ ...r, oldestOverdueDate: oldestOverdueRaw ? toMMDDYYYY(oldestOverdueRaw) : null }))
+          .slice(0, 10);
 
         reportData = {
           snapshot: {
@@ -1435,25 +1500,24 @@ const [savingProfile, setSavingProfile] = useState(false);
           },
           stagnant: {
             count: stagnantCases.length,
-            cases: stagnantCases.slice(0, 15).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, lastActivity: toMMDDYYYY(getLastActivityDate(c)), daysSince: calculateDaysDiff(getLastActivityDate(c)) }))
+            cases: stagnantCases.slice(0, 15).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', lastActivity: toMMDDYYYY(getLastActivityDate(c)), daysSince: calculateDaysDiff(getLastActivityDate(c)) }))
           },
           vouchers: {
-            missing90Plus: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, daysAssigned: calculateDaysDiff(c.dateOpened) })),
-            missing60to89: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 60 && calculateDaysDiff(c.dateOpened) < 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, daysAssigned: calculateDaysDiff(c.dateOpened) })),
-            missing30to59: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 30 && calculateDaysDiff(c.dateOpened) < 60).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, daysAssigned: calculateDaysDiff(c.dateOpened) })),
+            missing90Plus: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened) })),
+            missing60to89: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 60 && calculateDaysDiff(c.dateOpened) < 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened) })),
+            missing30to59: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 30 && calculateDaysDiff(c.dateOpened) < 60).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened) })),
             missingOnClosedCount: filtered.filter((c: Case) => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.MISSING).length,
-            submittedNotPaidCount: filtered.filter((c: Case) => c.voucherStatus === VoucherStatus.SUBMITTED).length
+            preAuditOpenVoucher: filtered.filter((c: Case) => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.OPEN).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', dateClosed: toMMDDYYYY(c.dateClosed) }))
           },
           newCases: {
             openedLast14DaysCount: newCasesOpened.length,
             notTouchedCount: newCasesNotTouched.length,
-            notTouched: newCasesNotTouched.slice(0, 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, dateOpened: toMMDDYYYY(c.dateOpened) }))
+            notTouched: newCasesNotTouched.slice(0, 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', dateOpened: toMMDDYYYY(c.dateOpened) }))
           },
           court: {
-            upcomingNext7DaysCount: openCases.filter(c => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next7Str).length,
-            trialReadinessCount: trialReadiness.length,
-            trialWithNoRecentActivityCount: trialWithNoRecentActivity.length,
-            trialWithNoRecentActivity: trialWithNoRecentActivity.slice(0, 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, event: c.nextEventDescription, courtDate: toMMDDYYYY(c.nextCourtDate), openTasks: tasksInScope.filter(t => t.caseId === c.id && !t.completed).length }))
+            trialReadinessNext30DaysCount: trialReadinessNext30Days.length,
+            trialReadinessNext30DaysNoActivityCount: trialReadinessNext30DaysNoActivity.length,
+            trialReadinessNext30DaysNoActivityList: trialReadinessNext30DaysNoActivity.slice(0, 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', event: c.nextEventDescription, courtDate: toMMDDYYYY(c.nextCourtDate), openTasks: tasksInScope.filter(t => t.caseId === c.id && !t.completed).length }))
           }
         };
       }
@@ -1472,6 +1536,9 @@ const [savingProfile, setSavingProfile] = useState(false);
         setGeneratedReportIsHtml(true);
       } else if (reportId === 'aged' && agedReportFormat === 'html' && reportData.unbilled90 !== undefined) {
         setGeneratedReport(buildAgedReportHtml(reportData, selectedAttorneyFilter));
+        setGeneratedReportIsHtml(true);
+      } else if (reportId === 'intel' && intelReportFormat === 'html' && reportData.snapshot !== undefined) {
+        setGeneratedReport(buildIntelReportHtml(reportData));
         setGeneratedReportIsHtml(true);
       } else {
         const result = reportId === 'intel' ? await generateGlobalIntelligenceBrief(reportData) : await generateAttorneyReport(reportId, selectedAttorneyFilter, reportData);
@@ -2486,21 +2553,21 @@ const [savingProfile, setSavingProfile] = useState(false);
                         </div>
                       ))}
                     </div>
-                    {(selectedReportId === 'weekly' || selectedReportId === 'aged') && (
+                    {(selectedReportId === 'weekly' || selectedReportId === 'aged' || selectedReportId === 'intel') && (
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
                         <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Output format</p>
                         <div className="flex rounded-xl bg-white p-1 border border-slate-100 shadow-inner">
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : agedReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); selectedReportId === 'intel' && setIntelReportFormat('plain'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : selectedReportId === 'aged' ? agedReportFormat === 'plain' : intelReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             Plain text
                           </button>
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : agedReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); selectedReportId === 'intel' && setIntelReportFormat('html'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : selectedReportId === 'aged' ? agedReportFormat === 'html' : intelReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             HTML (tables)
                           </button>

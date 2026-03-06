@@ -25,7 +25,7 @@ All task counts and lists use **global tasks** whose `caseId` is in the filtered
 | **activeTaskCount** | Count of tasks with `completed = false`. |
 | **overdueCount** | Tasks not completed and `dueDate < today`. |
 | **dueThisWeekCount** | Tasks not completed and due date between today and 7 days from now. |
-| **casesWithMostOpenTasks** | Up to 10 cases (defendant name, case number, open task count) sorted by open task count descending. Surfaces where the investigator is spread thin. |
+| **casesWithMostOpenTasks** | Up to 10 cases (defendant name, case number, open task count, overdue task count, oldest overdue date if any). **Order:** (1) Cases with more overdue tasks first; (2) then by oldest overdue date (most overdue first); (3) then by open task count. So a case with one task 30 days overdue appears above a case with two tasks due next week. Surfaces urgency first, then volume. |
 
 ---
 
@@ -44,7 +44,7 @@ Purpose: focus attention on re-engaging these matters to capture billable work a
 
 ## 4. Voucher pipeline / missing billables
 
-All counts and lists use **open** cases only (except missing on closed).
+All counts and lists use **open** cases only (except missing on closed and pre-audit).
 
 | Field | Source |
 |-------|--------|
@@ -52,9 +52,9 @@ All counts and lists use **open** cases only (except missing on closed).
 | **missing60to89** | Open cases, voucher = Missing, days assigned 60–89. |
 | **missing30to59** | Open cases, voucher = Missing, days assigned 30–59. |
 | **missingOnClosedCount** | Count of closed cases with voucher = Missing (never submitted). |
-| **submittedNotPaidCount** | Count of cases (any status) with voucher = Submitted. |
+| **preAuditOpenVoucher** | Closed cases with voucher = **Open**. List: name, case number, date closed. Only step left is for investigator to bill for payment (e.g. Jenkins, Roper). |
 
-Purpose: show where follow-up on vouchers can drive revenue.
+Submitted/not paid is not included; no further action is required once submitted.
 
 ---
 
@@ -72,14 +72,15 @@ Purpose: highlight new matters that need quick intake and first log to lock in b
 
 ## 6. Court / trial readiness
 
+Focus is on trial/readiness cases in the next 30 days so they get touched before court.
+
 | Field | Source |
 |-------|--------|
-| **upcomingNext7DaysCount** | Open cases with `nextCourtDate` between today and 7 days from now. |
-| **trialReadinessCount** | Open cases where `nextEventDescription` contains "TRIAL" or "READINESS" (case-insensitive). |
-| **trialWithNoRecentActivityCount** | Of those, cases with no activity in the last 7 days. |
-| **trialWithNoRecentActivity** | Up to 10: name, case number, event, court date, count of open tasks. |
+| **trialReadinessNext30DaysCount** | Open cases whose **next** court event is trial or trial-readiness (description contains "TRIAL" or "READINESS") **and** that court date is within the **next 30 days**. |
+| **trialReadinessNext30DaysNoActivityCount** | Of those, cases with **no case activity in the past 7 days**. |
+| **trialReadinessNext30DaysNoActivityList** | Up to 10 of those: name, case number, event, court date, open task count. |
 
-Purpose: suggest pre-trial review and case log before court to capture billable time and readiness.
+**Narrative:** "X cases have a trial or trial-readiness hearing in the next 30 days; Y of those have had no case log in the past 7 days and should be touched before court."
 
 ---
 

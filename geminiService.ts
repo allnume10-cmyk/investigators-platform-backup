@@ -106,7 +106,7 @@ CRITICAL: Use ONLY the data provided below. Do not invent any numbers, dollar am
 
 Format the brief with clear section headings and use horizontal rules (---) and double-line breaks between sections for readability. Today is ${today}.
 
-Write 2–4 priority action items at the end, based only on the data (e.g. "Focus on the N stagnant cases," "Submit vouchers for the 90+ day missing list," "Touch the N new cases not yet worked," "Review trial-readiness cases with no recent activity").
+Write 2–4 priority action items at the end, based only on the data (e.g. "Focus on the N stagnant cases," "Touch the N new cases not yet worked," "Review trial-readiness cases with no recent activity"). For any "submit vouchers" or "bill for payment" action, refer ONLY to pre-audit cases (closed with open voucher – use the preAuditOpenVoucher list and its case names). Do not suggest submitting vouchers for the missing-voucher buckets (90+, 60–89, 30–59 days or missing on closed); those are different follow-up actions.
 
 Data (use this exactly):
 
@@ -114,12 +114,12 @@ ${JSON.stringify(firmData, null, 2)}
 
 Sections to cover in your brief (describe what the numbers mean and name specific cases only when they appear in the lists):
 1. Snapshot – active matters, total paid revenue, revenue paid this month, scope (attorney filter).
-2. Outstanding tasks – active task count, overdue count, due this week; call out cases with the most open tasks so management can focus investigator attention.
+2. Outstanding tasks – active task count, overdue count, due this week; list of cases is ordered by most overdue first (overdue task count, then oldest overdue date, then open task count). Call out cases with overdue tasks and their oldest overdue date so management can focus investigator attention.
 3. Stagnant cases – open cases with no activity in 45+ days; list names/case numbers from the data; suggest re-engaging to capture billable work and avoid lost revenue.
-4. Voucher pipeline / missing billables – cases with missing voucher 90+ days, 60–89 days, 30–59 days; closed cases with missing voucher; submitted awaiting payment. Emphasize that following up on these drives revenue.
+4. Voucher pipeline / missing billables – cases with missing voucher 90+ days, 60–89 days, 30–59 days; closed cases with missing voucher; pre-audit cases (closed with open voucher – only step left is for investigator to bill for payment; list names/case numbers). Emphasize that following up on these drives revenue.
 5. New cases – opened in last 14 days; how many have barely been touched (0–1 activity); list them; suggest quick intake and first log to lock in billable time.
-6. Court / trial readiness – upcoming court in next 7 days; trial/readiness cases; trial cases with no recent activity (suggest pre-trial review and case log before court).
-7. Priority actions – 2–4 specific next steps derived from the data above.
+6. Court / trial readiness – Focus only on trial/readiness in the next 30 days. "[trialReadinessNext30DaysCount] cases have a trial or trial-readiness hearing in the next 30 days; [trialReadinessNext30DaysNoActivityCount] of those have had no case log in the past 7 days and should be touched before court." List names from trialReadinessNext30DaysNoActivityList.
+7. Priority actions – 2–4 specific next steps derived from the data above. If you include a submit-vouchers / bill-for-payment action, it must refer only to pre-audit cases (preAuditOpenVoucher): closed cases with open voucher where the only step left is for the investigator to bill for payment.
 
 Sign off: Andrea, BRENT'S INVESTIGATIVE SERVICES, LLC.`;
 
