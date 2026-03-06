@@ -1295,12 +1295,12 @@ const [savingProfile, setSavingProfile] = useState(false);
     const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
     const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
 
-    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+    const section = (title: string, narrative: string, headers: string[], rows: Record<string, string>[]) => {
       const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
       const body = rows.length === 0
         ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None at this time.</td></tr></tbody>`
         : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
-      return `<h3 style="margin: 1.25rem 0 0.5rem; font-size: 14px;">${esc(title)}</h3><table style="${tableStyle}">${thead}${body}</table>`;
+      return `<h3 style="margin: 1.25rem 0 0.35rem; font-size: 14px;">${esc(title)}</h3><p style="margin: 0 0 0.5rem; font-size: 12px; color: #475569;">${esc(narrative)}</p><table style="${tableStyle}">${thead}${body}</table>`;
     };
 
     const s = data.snapshot || {};
@@ -1310,19 +1310,35 @@ const [savingProfile, setSavingProfile] = useState(false);
     const n = data.newCases || {};
     const c = data.court || {};
 
+    const taskList = t.casesWithMostOpenTasks || [];
+    const stagnantList = st.cases || [];
+    const missing90 = v.missing90Plus || [];
+    const missing60 = v.missing60to89 || [];
+    const missing30 = v.missing30to59 || [];
+    const preAudit = v.preAuditOpenVoucher || [];
+    const notTouched = n.notTouched || [];
+    const trialNoActivity = c.trialReadinessNext30DaysNoActivityList || [];
+
+    const priorityActions: string[] = [];
+    if (stagnantList.length > 0) priorityActions.push(`Re-engage the ${stagnantList.length} stagnant case(s) (no activity 45+ days) to capture billable work.`);
+    if (notTouched.length > 0) priorityActions.push(`Touch the ${n.notTouchedCount ?? notTouched.length} new case(s) not yet worked (quick intake and first log).`);
+    if (trialNoActivity.length > 0) priorityActions.push(`Review trial/readiness cases with no recent activity (${c.trialReadinessNext30DaysNoActivityCount ?? trialNoActivity.length} case(s)) before court.`);
+    if (preAudit.length > 0) priorityActions.push(`Submit vouchers / bill for payment for pre-audit cases (closed with open voucher): ${preAudit.map((r: any) => r.name).join(', ')}.`);
+    if (t.overdueCount > 0) priorityActions.push(`Address ${t.overdueCount} overdue task(s) first.`);
+    if (priorityActions.length === 0) priorityActions.push('No priority actions this period; maintain steady follow-up on open matters and vouchers.');
+
     const parts: string[] = [
       `<h2 style="margin: 0 0 0.5rem; font-size: 16px;">Global Intel Brief</h2>`,
       `<p style="margin: 0 0 1rem;">Scope: ${esc(s.attorneyFilter)}. Active matters: ${s.activeMattersCount ?? 0}. Total paid revenue: $${Number(s.totalPaidRevenue || 0).toLocaleString()}. Paid this month: $${Number(s.paidThisMonth || 0).toLocaleString()}.</p>`,
-      section('Outstanding tasks – cases with most open/overdue tasks', ['Defendant', 'Case Number', 'Attorney', 'Open Tasks', 'Overdue', 'Oldest Overdue'],
-        (t.casesWithMostOpenTasks || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Open Tasks': String(r.openTaskCount ?? ''), Overdue: String(r.overdueTaskCount ?? ''), 'Oldest Overdue': r.oldestOverdueDate ?? '' }))),
-      section('Stagnant cases (no activity 45+ days)', ['Defendant', 'Case Number', 'Attorney', 'Last Activity', 'Days Since'],
-        (st.cases || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Last Activity': r.lastActivity ?? '', 'Days Since': String(r.daysSince ?? '') }))),
-      section('Missing voucher 90+ days', ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], (v.missing90Plus || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
-      section('Missing voucher 60–89 days', ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], (v.missing60to89 || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
-      section('Missing voucher 30–59 days', ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], (v.missing30to59 || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
-      section('Pre-audit (closed, open voucher – bill for payment)', ['Defendant', 'Case Number', 'Attorney', 'Date Closed'], (v.preAuditOpenVoucher || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Date Closed': r.dateClosed ?? '' }))),
-      section('New cases not touched (opened last 14 days, 0–1 activity)', ['Defendant', 'Case Number', 'Attorney', 'Date Opened'], (n.notTouched || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Date Opened': r.dateOpened ?? '' }))),
-      section('Trial/readiness in next 30 days – no recent activity', ['Defendant', 'Case Number', 'Attorney', 'Event', 'Court Date', 'Open Tasks'], (c.trialReadinessNext30DaysNoActivityList || []).map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', Event: r.event ?? '', 'Court Date': r.courtDate ?? '', 'Open Tasks': String(r.openTasks ?? '') }))),
+      section('1. Outstanding tasks', `You have ${t.activeTaskCount ?? 0} active task(s) (${t.overdueCount ?? 0} overdue, ${t.dueThisWeekCount ?? 0} due this week). Below are cases with the most open or overdue tasks so you can focus attention where it is most needed.`, ['Defendant', 'Case Number', 'Attorney', 'Open Tasks', 'Overdue', 'Oldest Overdue'], taskList.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Open Tasks': String(r.openTaskCount ?? ''), Overdue: String(r.overdueTaskCount ?? ''), 'Oldest Overdue': r.oldestOverdueDate ?? '' }))),
+      section('2. Stagnant cases', `These ${st.count ?? 0} open case(s) have had no activity in 45+ days. Below are the 10 oldest (longest stagnant to most recent). Re-engaging them helps capture billable work and avoid lost revenue.`, ['Defendant', 'Case Number', 'Attorney', 'Last Activity', 'Days Since'], stagnantList.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Last Activity': r.lastActivity ?? '', 'Days Since': String(r.daysSince ?? '') }))),
+      section('3. Voucher pipeline – missing 90+ days', `Cases with missing voucher assigned 90+ days ago (oldest to newest). Following up on these drives revenue.`, ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], missing90.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
+      section('4. Voucher pipeline – missing 60–89 days', `Cases with missing voucher assigned 60–89 days ago (oldest to newest).`, ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], missing60.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
+      section('5. Voucher pipeline – missing 30–59 days', `Cases with missing voucher assigned 30–59 days ago (oldest to newest).`, ['Defendant', 'Case Number', 'Attorney', 'Days Assigned'], missing30.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Days Assigned': String(r.daysAssigned ?? '') }))),
+      section('6. Pre-audit (closed, open voucher)', `These closed case(s) have an open voucher; the only step left is for the investigator to bill for payment.`, ['Defendant', 'Case Number', 'Attorney', 'Date Closed'], preAudit.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Date Closed': r.dateClosed ?? '' }))),
+      section('7. New cases not touched', `${n.openedLast14DaysCount ?? 0} case(s) opened in the last 14 days; ${n.notTouchedCount ?? 0} have 0–1 activity. Quick intake and first log lock in billable time.`, ['Defendant', 'Case Number', 'Attorney', 'Date Opened'], notTouched.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', 'Date Opened': r.dateOpened ?? '' }))),
+      section('8. Trial/readiness in next 30 days', `${c.trialReadinessNext30DaysCount ?? 0} case(s) have a trial or trial-readiness hearing in the next 30 days; ${c.trialReadinessNext30DaysNoActivityCount ?? 0} of those have had no case log in the past 7 days and should be touched before court.`, ['Defendant', 'Case Number', 'Attorney', 'Event', 'Court Date', 'Open Tasks'], trialNoActivity.map((r: any) => ({ Defendant: r.name, 'Case Number': r.caseNumber, Attorney: r.attorneyName ?? '', Event: r.event ?? '', 'Court Date': r.courtDate ?? '', 'Open Tasks': String(r.openTasks ?? '') }))),
+      `<h3 style="margin: 1.5rem 0 0.35rem; font-size: 14px;">9. Priority actions</h3><p style="margin: 0 0 0.5rem; font-size: 12px; color: #475569;">Recommended next steps based on the data above.</p><ul style="margin: 0 0 1rem; padding-left: 1.25rem; font-size: 13px; color: #334155;">${priorityActions.map(a => `<li style="margin-bottom: 0.35rem;">${esc(a)}</li>`).join('')}</ul>`,
       `<p style="margin: 1.5rem 0 0.25rem;">Andrea, BRENT'S INVESTIGATIVE SERVICES, LLC</p>`
     ];
     return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 800px;">${parts.join('')}</div>`;
@@ -1500,12 +1516,15 @@ const [savingProfile, setSavingProfile] = useState(false);
           },
           stagnant: {
             count: stagnantCases.length,
-            cases: stagnantCases.slice(0, 15).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', lastActivity: toMMDDYYYY(getLastActivityDate(c)), daysSince: calculateDaysDiff(getLastActivityDate(c)) }))
+            cases: [...stagnantCases]
+              .sort((a, b) => calculateDaysDiff(getLastActivityDate(b)) - calculateDaysDiff(getLastActivityDate(a)))
+              .slice(0, 10)
+              .map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', lastActivity: toMMDDYYYY(getLastActivityDate(c)), daysSince: calculateDaysDiff(getLastActivityDate(c)) }))
           },
           vouchers: {
-            missing90Plus: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened) })),
-            missing60to89: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 60 && calculateDaysDiff(c.dateOpened) < 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened) })),
-            missing30to59: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 30 && calculateDaysDiff(c.dateOpened) < 60).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened) })),
+            missing90Plus: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened), dateOpened: c.dateOpened })).sort((a, b) => (a.dateOpened || '').localeCompare(b.dateOpened || '')).map(({ dateOpened, ...r }) => r),
+            missing60to89: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 60 && calculateDaysDiff(c.dateOpened) < 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened), dateOpened: c.dateOpened })).sort((a, b) => (a.dateOpened || '').localeCompare(b.dateOpened || '')).map(({ dateOpened, ...r }) => r),
+            missing30to59: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 30 && calculateDaysDiff(c.dateOpened) < 60).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', daysAssigned: calculateDaysDiff(c.dateOpened), dateOpened: c.dateOpened })).sort((a, b) => (a.dateOpened || '').localeCompare(b.dateOpened || '')).map(({ dateOpened, ...r }) => r),
             missingOnClosedCount: filtered.filter((c: Case) => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.MISSING).length,
             preAuditOpenVoucher: filtered.filter((c: Case) => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.OPEN).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, attorneyName: c.attorneyName ?? '', dateClosed: toMMDDYYYY(c.dateClosed) }))
           },
