@@ -655,6 +655,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [agedReportFormat, setAgedReportFormat] = useState<'plain' | 'html'>('html');
   const [agingReportFormat, setAgingReportFormat] = useState<'plain' | 'html'>('html');
   const [stagnantReportFormat, setStagnantReportFormat] = useState<'plain' | 'html'>('html');
+  const [pretrialReportFormat, setPretrialReportFormat] = useState<'plain' | 'html'>('html');
   const [intelReportFormat, setIntelReportFormat] = useState<'plain' | 'html'>('plain');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
@@ -1357,6 +1358,35 @@ const [savingProfile, setSavingProfile] = useState(false);
     return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
   };
 
+  const buildPretrialReportHtml = (data: { upcomingTrials: { name: string; caseNumber: string; event: string; dateFormatted: string; taskCount: number }[] }, attorneyName: string | null): string => {
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const lastName = attorneyName ? (() => { const part = attorneyName.split(',')[0].trim(); const words = part.split(/\s+/); return words[words.length - 1] || attorneyName; })() : '';
+    const greeting = lastName ? `Hi Attorney ${esc(lastName)}` : 'Hi Counsel';
+    const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
+    const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
+    const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
+
+    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+      const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
+      const body = rows.length === 0
+        ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None at this time.</td></tr></tbody>`
+        : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      return `<h3 style="margin: 1.25rem 0 0.5rem; font-size: 14px;">${esc(title)}</h3><table style="${tableStyle}">${thead}${body}</table>`;
+    };
+
+    const list = data.upcomingTrials || [];
+    const parts: string[] = [
+      `<p style="margin: 0 0 1rem;">${greeting},</p>`,
+      `<p style="margin: 0 0 1rem;">Below is the Pre-Trial Readiness audit for Brent's Investigative Services, LLC. These cases have a trial or trial-readiness event listed as their next court date.</p>`,
+      section('Upcoming trial / trial-readiness matters', ['Defendant', 'Case Number', 'Event', 'Court Date', 'Open Tasks'], list.map(c => ({ Defendant: c.name, 'Case Number': c.caseNumber, Event: c.event, 'Court Date': c.dateFormatted ?? '', 'Open Tasks': String(c.taskCount ?? '') }))),
+      `<p style="margin: 1.5rem 0 1rem;">Please let us know if additional information is needed.</p>`,
+      `<p style="margin: 1.25rem 0 0.25rem;">Thank you,</p>`,
+      `<p style="margin: 0;">Andrea</p>`,
+      `<p style="margin: 0;">Brent's Investigative Services</p>`
+    ];
+    return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
+  };
+
   const buildIntelReportHtml = (data: any): string => {
     const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
@@ -1526,8 +1556,16 @@ const [savingProfile, setSavingProfile] = useState(false);
         });
         reportData = { stagnantMatters: stagnantList };
       } else if (reportId === 'pretrial') {
+        const trialCases = filtered.filter(c => (c.nextEventDescription || '').toUpperCase().includes('TRIAL') || (c.nextEventDescription || '').toUpperCase().includes('READINESS'));
         reportData = {
-          upcomingTrials: filtered.filter(c => (c.nextEventDescription || '').toUpperCase().includes('TRIAL') || (c.nextEventDescription || '').toUpperCase().includes('READINESS')).map(c => ({ name: `${c.defendantLastName}`, event: c.nextEventDescription, date: c.nextCourtDate, taskCount: (globalTasks.filter(t => t.caseId === c.id).length) }))
+          upcomingTrials: trialCases.map(c => ({
+            name: `${c.defendantLastName}, ${c.defendantFirstName}`,
+            caseNumber: c.caseNumber ?? '',
+            event: c.nextEventDescription ?? '',
+            date: c.nextCourtDate,
+            dateFormatted: toMMDDYYYY(c.nextCourtDate),
+            taskCount: globalTasks.filter(t => t.caseId === c.id && !t.completed).length
+          }))
         };
       } else if (reportId === 'intel') {
         const caseIds = new Set(filtered.map((c: Case) => c.id));
@@ -1640,6 +1678,9 @@ const [savingProfile, setSavingProfile] = useState(false);
         setGeneratedReportIsHtml(true);
       } else if (reportId === 'stagnant' && stagnantReportFormat === 'html' && reportData.stagnantMatters !== undefined) {
         setGeneratedReport(buildStagnantReportHtml(reportData, selectedAttorneyFilter));
+        setGeneratedReportIsHtml(true);
+      } else if (reportId === 'pretrial' && pretrialReportFormat === 'html' && reportData.upcomingTrials !== undefined) {
+        setGeneratedReport(buildPretrialReportHtml(reportData, selectedAttorneyFilter));
         setGeneratedReportIsHtml(true);
       } else if (reportId === 'intel' && intelReportFormat === 'html' && reportData.snapshot !== undefined) {
         setGeneratedReport(buildIntelReportHtml(reportData));
@@ -2657,21 +2698,21 @@ const [savingProfile, setSavingProfile] = useState(false);
                         </div>
                       ))}
                     </div>
-                    {(selectedReportId === 'weekly' || selectedReportId === 'aged' || selectedReportId === 'aging' || selectedReportId === 'stagnant' || selectedReportId === 'intel') && (
+                    {(selectedReportId === 'weekly' || selectedReportId === 'aged' || selectedReportId === 'aging' || selectedReportId === 'stagnant' || selectedReportId === 'pretrial' || selectedReportId === 'intel') && (
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
                         <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Output format</p>
                         <div className="flex rounded-xl bg-white p-1 border border-slate-100 shadow-inner">
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); selectedReportId === 'aging' && setAgingReportFormat('plain'); selectedReportId === 'stagnant' && setStagnantReportFormat('plain'); selectedReportId === 'intel' && setIntelReportFormat('plain'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : selectedReportId === 'aged' ? agedReportFormat === 'plain' : selectedReportId === 'aging' ? agingReportFormat === 'plain' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'plain' : intelReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); selectedReportId === 'aging' && setAgingReportFormat('plain'); selectedReportId === 'stagnant' && setStagnantReportFormat('plain'); selectedReportId === 'pretrial' && setPretrialReportFormat('plain'); selectedReportId === 'intel' && setIntelReportFormat('plain'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : selectedReportId === 'aged' ? agedReportFormat === 'plain' : selectedReportId === 'aging' ? agingReportFormat === 'plain' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'plain' : selectedReportId === 'pretrial' ? pretrialReportFormat === 'plain' : intelReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             Plain text
                           </button>
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); selectedReportId === 'aging' && setAgingReportFormat('html'); selectedReportId === 'stagnant' && setStagnantReportFormat('html'); selectedReportId === 'intel' && setIntelReportFormat('html'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : selectedReportId === 'aged' ? agedReportFormat === 'html' : selectedReportId === 'aging' ? agingReportFormat === 'html' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'html' : intelReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); selectedReportId === 'aging' && setAgingReportFormat('html'); selectedReportId === 'stagnant' && setStagnantReportFormat('html'); selectedReportId === 'pretrial' && setPretrialReportFormat('html'); selectedReportId === 'intel' && setIntelReportFormat('html'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : selectedReportId === 'aged' ? agedReportFormat === 'html' : selectedReportId === 'aging' ? agingReportFormat === 'html' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'html' : selectedReportId === 'pretrial' ? pretrialReportFormat === 'html' : intelReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             HTML (tables)
                           </button>
