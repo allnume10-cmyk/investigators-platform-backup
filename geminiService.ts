@@ -99,12 +99,30 @@ export const generateGlobalIntelligenceBrief = async (firmData: any) => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const prompt = `Virtual Chief of Staff Briefing for Gregory at BRENT'S INVESTIGATIVE SERVICES.
-    Matters: ${firmData.activeMattersCount}, Urgent: ${firmData.urgentActionCount}, Revenue: $${firmData.totalSettlement.toLocaleString()}.
-    
-    Format as a strategic report.
-    CRITICAL READABILITY RULE: Use markdown horizontal rules ('---') and double-line breaks between different cases or dossiers to ensure significant white space and readable separation.
-    Today is ${today}.`;
+
+    const prompt = `You are writing a management briefing for BRENT'S INVESTIGATIVE SERVICES. The goal is a clear picture of operations and what to focus on to generate steady revenue, with concrete suggestions.
+
+CRITICAL: Use ONLY the data provided below. Do not invent any numbers, dollar amounts, case names, or categories. Every statistic and list item must come directly from the data. If a section has zero items, say so.
+
+Format the brief with clear section headings and use horizontal rules (---) and double-line breaks between sections for readability. Today is ${today}.
+
+Write 2–4 priority action items at the end, based only on the data (e.g. "Focus on the N stagnant cases," "Submit vouchers for the 90+ day missing list," "Touch the N new cases not yet worked," "Review trial-readiness cases with no recent activity").
+
+Data (use this exactly):
+
+${JSON.stringify(firmData, null, 2)}
+
+Sections to cover in your brief (describe what the numbers mean and name specific cases only when they appear in the lists):
+1. Snapshot – active matters, total paid revenue, revenue paid this month, scope (attorney filter).
+2. Outstanding tasks – active task count, overdue count, due this week; call out cases with the most open tasks so management can focus investigator attention.
+3. Stagnant cases – open cases with no activity in 45+ days; list names/case numbers from the data; suggest re-engaging to capture billable work and avoid lost revenue.
+4. Voucher pipeline / missing billables – cases with missing voucher 90+ days, 60–89 days, 30–59 days; closed cases with missing voucher; submitted awaiting payment. Emphasize that following up on these drives revenue.
+5. New cases – opened in last 14 days; how many have barely been touched (0–1 activity); list them; suggest quick intake and first log to lock in billable time.
+6. Court / trial readiness – upcoming court in next 7 days; trial/readiness cases; trial cases with no recent activity (suggest pre-trial review and case log before court).
+7. Priority actions – 2–4 specific next steps derived from the data above.
+
+Sign off: Andrea, BRENT'S INVESTIGATIVE SERVICES, LLC.`;
+
     const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
     return response.text || '';
   });

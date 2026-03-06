@@ -1395,7 +1395,67 @@ const [savingProfile, setSavingProfile] = useState(false);
           upcomingTrials: filtered.filter(c => (c.nextEventDescription || '').toUpperCase().includes('TRIAL') || (c.nextEventDescription || '').toUpperCase().includes('READINESS')).map(c => ({ name: `${c.defendantLastName}`, event: c.nextEventDescription, date: c.nextCourtDate, taskCount: (globalTasks.filter(t => t.caseId === c.id).length) }))
         };
       } else if (reportId === 'intel') {
-        reportData = { activeMattersCount: filtered.filter(c => c.status === CaseStatus.OPEN).length, urgentActionCount: filtered.filter(c => c.nextCourtDate && calculateDaysDiff(c.nextCourtDate) >= -7).length, totalSettlement: filtered.filter(c => c.voucherStatus === VoucherStatus.PAID).reduce((s, c) => s + (c.amountPaid || 0), 0) };
+        const caseIds = new Set(filtered.map((c: Case) => c.id));
+        const tasksInScope = globalTasks.filter(t => caseIds.has(t.caseId));
+        const openCases = filtered.filter((c: Case) => c.status === CaseStatus.OPEN);
+        const getLastActivityDate = (c: Case) => {
+          const logs = c.activities || [];
+          return logs.length > 0 ? [...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date : c.dateOpened;
+        };
+        const stagnantCases = openCases.filter(c => calculateDaysDiff(getLastActivityDate(c)) >= 45);
+        const fourteenDaysAgo = new Date(); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+        const fourteenStr = fourteenDaysAgo.toLocaleDateString('en-CA');
+        const newCasesOpened = openCases.filter(c => c.dateOpened >= fourteenStr);
+        const newCasesNotTouched = newCasesOpened.filter(c => (c.activities || []).length <= 1);
+        const next7 = new Date(); next7.setDate(next7.getDate() + 7);
+        const next7Str = next7.toLocaleDateString('en-CA');
+        const trialReadiness = openCases.filter(c => /TRIAL|READINESS/i.test(c.nextEventDescription || ''));
+        const trialWithNoRecentActivity = trialReadiness.filter(c => {
+          const last = getLastActivityDate(c);
+          return calculateDaysDiff(last) > 7;
+        });
+        const startOfMonth = new Date(); startOfMonth.setDate(1);
+        const monthStr = startOfMonth.toLocaleDateString('en-CA').slice(0, 7);
+        const paidThisMonth = filtered.filter((c: Case) => c.voucherStatus === VoucherStatus.PAID && (c.datePaid || '').slice(0, 7) === monthStr).reduce((s: number, c: Case) => s + (c.amountPaid || 0), 0);
+        const casesByOpenTasks = openCases.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, openTaskCount: tasksInScope.filter(t => t.caseId === c.id && !t.completed).length })).filter(x => x.openTaskCount > 0).sort((a, b) => b.openTaskCount - a.openTaskCount).slice(0, 10);
+
+        reportData = {
+          snapshot: {
+            activeMattersCount: openCases.length,
+            totalPaidRevenue: filtered.filter((c: Case) => c.voucherStatus === VoucherStatus.PAID).reduce((s: number, c: Case) => s + (c.amountPaid || 0), 0),
+            paidThisMonth,
+            retainedServicesRevenue: filtered.filter((c: Case) => c.voucherStatus === VoucherStatus.PAID && (c as any).isRetainedServices).reduce((s: number, c: Case) => s + (c.amountPaid || 0), 0),
+            attorneyFilter: selectedAttorneyFilter || 'All attorneys'
+          },
+          tasks: {
+            activeTaskCount: tasksInScope.filter(t => !t.completed).length,
+            overdueCount: tasksInScope.filter(t => !t.completed && t.dueDate < todayStr).length,
+            dueThisWeekCount: tasksInScope.filter(t => !t.completed && t.dueDate >= todayStr && t.dueDate <= next7Str).length,
+            casesWithMostOpenTasks: casesByOpenTasks
+          },
+          stagnant: {
+            count: stagnantCases.length,
+            cases: stagnantCases.slice(0, 15).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, lastActivity: toMMDDYYYY(getLastActivityDate(c)), daysSince: calculateDaysDiff(getLastActivityDate(c)) }))
+          },
+          vouchers: {
+            missing90Plus: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, daysAssigned: calculateDaysDiff(c.dateOpened) })),
+            missing60to89: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 60 && calculateDaysDiff(c.dateOpened) < 90).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, daysAssigned: calculateDaysDiff(c.dateOpened) })),
+            missing30to59: openCases.filter(c => c.voucherStatus === VoucherStatus.MISSING && calculateDaysDiff(c.dateOpened) >= 30 && calculateDaysDiff(c.dateOpened) < 60).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, daysAssigned: calculateDaysDiff(c.dateOpened) })),
+            missingOnClosedCount: filtered.filter((c: Case) => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.MISSING).length,
+            submittedNotPaidCount: filtered.filter((c: Case) => c.voucherStatus === VoucherStatus.SUBMITTED).length
+          },
+          newCases: {
+            openedLast14DaysCount: newCasesOpened.length,
+            notTouchedCount: newCasesNotTouched.length,
+            notTouched: newCasesNotTouched.slice(0, 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, dateOpened: toMMDDYYYY(c.dateOpened) }))
+          },
+          court: {
+            upcomingNext7DaysCount: openCases.filter(c => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next7Str).length,
+            trialReadinessCount: trialReadiness.length,
+            trialWithNoRecentActivityCount: trialWithNoRecentActivity.length,
+            trialWithNoRecentActivity: trialWithNoRecentActivity.slice(0, 10).map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber, event: c.nextEventDescription, courtDate: toMMDDYYYY(c.nextCourtDate), openTasks: tasksInScope.filter(t => t.caseId === c.id && !t.completed).length }))
+          }
+        };
       }
 
       if (reportId === 'weekly' && weeklyReportFormat === 'html' && reportData.upcomingCourt !== undefined) {
@@ -1414,7 +1474,7 @@ const [savingProfile, setSavingProfile] = useState(false);
         setGeneratedReport(buildAgedReportHtml(reportData, selectedAttorneyFilter));
         setGeneratedReportIsHtml(true);
       } else {
-        const result = (reportId === 'intel' && !selectedAttorneyFilter) ? await generateGlobalIntelligenceBrief(reportData) : await generateAttorneyReport(reportId, selectedAttorneyFilter, reportData);
+        const result = reportId === 'intel' ? await generateGlobalIntelligenceBrief(reportData) : await generateAttorneyReport(reportId, selectedAttorneyFilter, reportData);
         setGeneratedReport(result);
         setGeneratedReportIsHtml(false);
       }
