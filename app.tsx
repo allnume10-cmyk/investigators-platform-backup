@@ -1534,11 +1534,12 @@ const [savingProfile, setSavingProfile] = useState(false);
       } else if (reportId === 'aging') {
         const activeForAging = filtered.filter((c: Case) => c.status !== CaseStatus.CLOSED);
         const mapAging = (c: Case) => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, opened: c.dateOpened, age: calculateDaysDiff(c.dateOpened) });
+        const byAgeDesc = (a: { age: number }, b: { age: number }) => b.age - a.age;
         reportData = {
           activeMattersCount: activeForAging.length,
-          legacyMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) >= 91).map(mapAging),
-          seasonedMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) >= 31 && calculateDaysDiff(c.dateOpened) <= 90).map(mapAging),
-          newMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) <= 30).map(mapAging)
+          legacyMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) >= 91).map(mapAging).sort(byAgeDesc),
+          seasonedMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) >= 31 && calculateDaysDiff(c.dateOpened) <= 90).map(mapAging).sort(byAgeDesc),
+          newMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) <= 30).map(mapAging).sort(byAgeDesc)
         };
       } else if (reportId === 'stagnant') {
         const stagnantList = filtered.filter(c => {
@@ -1553,20 +1554,20 @@ const [savingProfile, setSavingProfile] = useState(false);
             lastActivity: lastLog ? toMMDDYYYY(lastLog) : 'None',
             daysSince: calculateDaysDiff(lastLog)
           };
-        });
+        }).sort((a, b) => b.daysSince - a.daysSince); // oldest to newest: longest stagnant first (greatest days since activity)
         reportData = { stagnantMatters: stagnantList };
       } else if (reportId === 'pretrial') {
         const trialCases = filtered.filter(c => (c.nextEventDescription || '').toUpperCase().includes('TRIAL') || (c.nextEventDescription || '').toUpperCase().includes('READINESS'));
-        reportData = {
-          upcomingTrials: trialCases.map(c => ({
-            name: `${c.defendantLastName}, ${c.defendantFirstName}`,
-            caseNumber: c.caseNumber ?? '',
-            event: c.nextEventDescription ?? '',
-            date: c.nextCourtDate,
-            dateFormatted: toMMDDYYYY(c.nextCourtDate),
-            taskCount: globalTasks.filter(t => t.caseId === c.id && !t.completed).length
-          }))
-        };
+        const trialMapped = trialCases.map(c => ({
+          name: `${c.defendantLastName}, ${c.defendantFirstName}`,
+          caseNumber: c.caseNumber ?? '',
+          event: c.nextEventDescription ?? '',
+          date: c.nextCourtDate,
+          dateFormatted: toMMDDYYYY(c.nextCourtDate),
+          taskCount: globalTasks.filter(t => t.caseId === c.id && !t.completed).length
+        }));
+        trialMapped.sort((a, b) => (a.date || '').localeCompare(b.date || '')); // court date earliest to latest
+        reportData = { upcomingTrials: trialMapped };
       } else if (reportId === 'intel') {
         const caseIds = new Set(filtered.map((c: Case) => c.id));
         const tasksInScope = globalTasks.filter(t => caseIds.has(t.caseId));
