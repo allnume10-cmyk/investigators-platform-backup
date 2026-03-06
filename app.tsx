@@ -652,7 +652,9 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
   const [generatedReportIsHtml, setGeneratedReportIsHtml] = useState(false);
   const [weeklyReportFormat, setWeeklyReportFormat] = useState<'plain' | 'html'>('plain');
-  const [agedReportFormat, setAgedReportFormat] = useState<'plain' | 'html'>('plain');
+  const [agedReportFormat, setAgedReportFormat] = useState<'plain' | 'html'>('html');
+  const [agingReportFormat, setAgingReportFormat] = useState<'plain' | 'html'>('html');
+  const [stagnantReportFormat, setStagnantReportFormat] = useState<'plain' | 'html'>('html');
   const [intelReportFormat, setIntelReportFormat] = useState<'plain' | 'html'>('plain');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
@@ -1289,6 +1291,72 @@ const [savingProfile, setSavingProfile] = useState(false);
     return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
   };
 
+  const buildAgingReportHtml = (data: { activeMattersCount: number; legacyMatters: any[]; seasonedMatters: any[]; newMatters: any[] }, attorneyName: string | null): string => {
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const fmt = (d: string | undefined) => {
+      if (!d) return '';
+      const m = String(d).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[2]}/${m[3]}/${m[1]}`;
+      return d;
+    };
+    const lastName = attorneyName ? (() => { const part = attorneyName.split(',')[0].trim(); const words = part.split(/\s+/); return words[words.length - 1] || attorneyName; })() : '';
+    const greeting = lastName ? `Hi Attorney ${esc(lastName)}` : 'Hi Counsel';
+    const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
+    const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
+    const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
+
+    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+      const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
+      const body = rows.length === 0
+        ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None at this time.</td></tr></tbody>`
+        : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      return `<h3 style="margin: 1.25rem 0 0.5rem; font-size: 14px;">${esc(title)}</h3><table style="${tableStyle}">${thead}${body}</table>`;
+    };
+
+    const row = (c: any) => ({ Defendant: c.name, 'Date Opened': fmt(c.opened), 'Days in Pipeline': String(c.age ?? '') });
+    const parts: string[] = [
+      `<p style="margin: 0 0 1rem;">${greeting},</p>`,
+      `<p style="margin: 0 0 1rem;">Current caseload: <strong>${data.activeMattersCount}</strong> active cases. Below is the Case Aging & Pipeline analysis for Brent's Investigative Services, LLC.</p>`,
+      section('New (0–30 days in pipeline)', ['Defendant', 'Date Opened', 'Days in Pipeline'], data.newMatters.map(row)),
+      section('Seasoned (31–90 days in pipeline)', ['Defendant', 'Date Opened', 'Days in Pipeline'], data.seasonedMatters.map(row)),
+      section('Legacy (91+ days in pipeline)', ['Defendant', 'Date Opened', 'Days in Pipeline'], data.legacyMatters.map(row)),
+      `<p style="margin: 1.5rem 0 1rem;">Please let us know if additional information is needed.</p>`,
+      `<p style="margin: 1.25rem 0 0.25rem;">Thank you,</p>`,
+      `<p style="margin: 0;">Andrea</p>`,
+      `<p style="margin: 0;">Brent's Investigative Services</p>`
+    ];
+    return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
+  };
+
+  const buildStagnantReportHtml = (data: { stagnantMatters: { name: string; caseNumber: string; lastActivity: string; daysSince: number }[] }, attorneyName: string | null): string => {
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const lastName = attorneyName ? (() => { const part = attorneyName.split(',')[0].trim(); const words = part.split(/\s+/); return words[words.length - 1] || attorneyName; })() : '';
+    const greeting = lastName ? `Hi Attorney ${esc(lastName)}` : 'Hi Counsel';
+    const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
+    const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
+    const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
+
+    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+      const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
+      const body = rows.length === 0
+        ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None at this time.</td></tr></tbody>`
+        : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(r[h] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      return `<h3 style="margin: 1.25rem 0 0.5rem; font-size: 14px;">${esc(title)}</h3><table style="${tableStyle}">${thead}${body}</table>`;
+    };
+
+    const list = data.stagnantMatters || [];
+    const parts: string[] = [
+      `<p style="margin: 0 0 1rem;">${greeting},</p>`,
+      `<p style="margin: 0 0 1rem;">Below is the Stagnant Advisory for Brent's Investigative Services, LLC. These active cases have had no activity in 45+ days. Re-engaging them helps capture billable work and avoid lost revenue.</p>`,
+      section('Risk Registry – Stagnant cases (no activity 45+ days)', ['Defendant', 'Case Number', 'Last Activity', 'Days Since'], list.map(c => ({ Defendant: c.name, 'Case Number': c.caseNumber, 'Last Activity': c.lastActivity, 'Days Since': String(c.daysSince ?? '') }))),
+      `<p style="margin: 1.5rem 0 1rem;">Please let us know if additional information is needed.</p>`,
+      `<p style="margin: 1.25rem 0 0.25rem;">Thank you,</p>`,
+      `<p style="margin: 0;">Andrea</p>`,
+      `<p style="margin: 0;">Brent's Investigative Services</p>`
+    ];
+    return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">${parts.join('')}</div>`;
+  };
+
   const buildIntelReportHtml = (data: any): string => {
     const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; font-size: 13px;';
@@ -1434,19 +1502,29 @@ const [savingProfile, setSavingProfile] = useState(false);
           unbilled30: aged30.map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, ref: c.caseNumber, judgeName: c.judgeName ?? '', assigned: toMMDDYYYY(c.dateOpened) }))
         };
       } else if (reportId === 'aging') {
+        const activeForAging = filtered.filter((c: Case) => c.status !== CaseStatus.CLOSED);
+        const mapAging = (c: Case) => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, opened: c.dateOpened, age: calculateDaysDiff(c.dateOpened) });
         reportData = {
-          legacyMatters: filtered.filter(c => calculateDaysDiff(c.dateOpened) >= 91).map(c => ({ name: `${c.defendantLastName}`, opened: c.dateOpened, age: calculateDaysDiff(c.dateOpened) })),
-          seasonedMatters: filtered.filter(c => calculateDaysDiff(c.dateOpened) >= 31 && calculateDaysDiff(c.dateOpened) <= 90).map(c => ({ name: `${c.defendantLastName}`, opened: c.dateOpened, age: calculateDaysDiff(c.dateOpened) })),
-          newMatters: filtered.filter(c => calculateDaysDiff(c.dateOpened) <= 30).map(c => ({ name: `${c.defendantLastName}`, opened: c.dateOpened, age: calculateDaysDiff(c.dateOpened) }))
+          activeMattersCount: activeForAging.length,
+          legacyMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) >= 91).map(mapAging),
+          seasonedMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) >= 31 && calculateDaysDiff(c.dateOpened) <= 90).map(mapAging),
+          newMatters: activeForAging.filter(c => calculateDaysDiff(c.dateOpened) <= 30).map(mapAging)
         };
       } else if (reportId === 'stagnant') {
-        reportData = {
-          stagnantMatters: filtered.filter(c => {
-            const logs = c.activities || [];
-            const lastLog = logs.length > 0 ? [...logs].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date : c.dateOpened;
-            return calculateDaysDiff(lastLog) >= 45 && c.status !== CaseStatus.CLOSED;
-          }).map(c => ({ name: `${c.defendantLastName}`, lastActivity: (c.activities || []).length > 0 ? [...c.activities].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date : 'None' }))
-        };
+        const stagnantList = filtered.filter(c => {
+          const logs = c.activities || [];
+          const lastLog = logs.length > 0 ? [...logs].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date : c.dateOpened;
+          return calculateDaysDiff(lastLog) >= 45 && c.status !== CaseStatus.CLOSED;
+        }).map(c => {
+          const lastLog = (c.activities || []).length > 0 ? [...c.activities].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date : c.dateOpened;
+          return {
+            name: `${c.defendantLastName}, ${c.defendantFirstName}`,
+            caseNumber: c.caseNumber ?? '',
+            lastActivity: lastLog ? toMMDDYYYY(lastLog) : 'None',
+            daysSince: calculateDaysDiff(lastLog)
+          };
+        });
+        reportData = { stagnantMatters: stagnantList };
       } else if (reportId === 'pretrial') {
         reportData = {
           upcomingTrials: filtered.filter(c => (c.nextEventDescription || '').toUpperCase().includes('TRIAL') || (c.nextEventDescription || '').toUpperCase().includes('READINESS')).map(c => ({ name: `${c.defendantLastName}`, event: c.nextEventDescription, date: c.nextCourtDate, taskCount: (globalTasks.filter(t => t.caseId === c.id).length) }))
@@ -1556,6 +1634,12 @@ const [savingProfile, setSavingProfile] = useState(false);
         setGeneratedReportIsHtml(true);
       } else if (reportId === 'aged' && agedReportFormat === 'html' && reportData.unbilled90 !== undefined) {
         setGeneratedReport(buildAgedReportHtml(reportData, selectedAttorneyFilter));
+        setGeneratedReportIsHtml(true);
+      } else if (reportId === 'aging' && agingReportFormat === 'html' && reportData.activeMattersCount !== undefined) {
+        setGeneratedReport(buildAgingReportHtml(reportData, selectedAttorneyFilter));
+        setGeneratedReportIsHtml(true);
+      } else if (reportId === 'stagnant' && stagnantReportFormat === 'html' && reportData.stagnantMatters !== undefined) {
+        setGeneratedReport(buildStagnantReportHtml(reportData, selectedAttorneyFilter));
         setGeneratedReportIsHtml(true);
       } else if (reportId === 'intel' && intelReportFormat === 'html' && reportData.snapshot !== undefined) {
         setGeneratedReport(buildIntelReportHtml(reportData));
@@ -2554,9 +2638,9 @@ const [savingProfile, setSavingProfile] = useState(false);
                     <div className="grid grid-cols-1 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                       {[
                         { id: 'weekly', label: 'Weekly Status Report', icon: CalendarDays, color: 'indigo', desc: 'Court dates, billing audit, and activity summary.' },
-                        { id: 'aged', label: 'Aged Voucher Audit', icon: TimerReset, color: 'rose', desc: 'Aging report for dossiers in "Missing" billing status (Focus 90+ days).' },
-                        { id: 'aging', label: 'Case Aging & Velocity', icon: History, color: 'blue', desc: 'Analysis of dossier processing speed from intake to resolution.' },
-                        { id: 'stagnant', label: 'Stagnant Advisory', icon: Snowflake, color: 'amber', desc: 'Critical warning for dossiers with zero activity in 45+ days.' },
+                        { id: 'aged', label: 'Aged Voucher Audit', icon: TimerReset, color: 'rose', desc: 'Aging report for active cases in "Missing" billing status (Focus 90+ days).' },
+                        { id: 'aging', label: 'Case Aging & Pipeline', icon: History, color: 'blue', desc: 'Analysis of how long active cases have been in the pipeline from intake to resolution.' },
+                        { id: 'stagnant', label: 'Stagnant Advisory', icon: Snowflake, color: 'amber', desc: 'Critical warning for active cases with zero activity in 45+ days.' },
                         { id: 'pretrial', label: 'Pre-Trial Readiness', icon: Target, color: 'emerald', desc: 'Strategic preparation status for upcoming trial dates.' },
                         ...(isAdmin ? [{ id: 'intel', label: 'Global Intel Brief', icon: Sparkles, color: 'indigo', desc: 'AI-generated operational synthesis for management.' }] : [])
                       ].map(r => (
@@ -2573,21 +2657,21 @@ const [savingProfile, setSavingProfile] = useState(false);
                         </div>
                       ))}
                     </div>
-                    {(selectedReportId === 'weekly' || selectedReportId === 'aged' || selectedReportId === 'intel') && (
+                    {(selectedReportId === 'weekly' || selectedReportId === 'aged' || selectedReportId === 'aging' || selectedReportId === 'stagnant' || selectedReportId === 'intel') && (
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
                         <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Output format</p>
                         <div className="flex rounded-xl bg-white p-1 border border-slate-100 shadow-inner">
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); selectedReportId === 'intel' && setIntelReportFormat('plain'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : selectedReportId === 'aged' ? agedReportFormat === 'plain' : intelReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); selectedReportId === 'aging' && setAgingReportFormat('plain'); selectedReportId === 'stagnant' && setStagnantReportFormat('plain'); selectedReportId === 'intel' && setIntelReportFormat('plain'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : selectedReportId === 'aged' ? agedReportFormat === 'plain' : selectedReportId === 'aging' ? agingReportFormat === 'plain' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'plain' : intelReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             Plain text
                           </button>
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); selectedReportId === 'intel' && setIntelReportFormat('html'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : selectedReportId === 'aged' ? agedReportFormat === 'html' : intelReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); selectedReportId === 'aging' && setAgingReportFormat('html'); selectedReportId === 'stagnant' && setStagnantReportFormat('html'); selectedReportId === 'intel' && setIntelReportFormat('html'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : selectedReportId === 'aged' ? agedReportFormat === 'html' : selectedReportId === 'aging' ? agingReportFormat === 'html' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'html' : intelReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             HTML (tables)
                           </button>
@@ -2612,7 +2696,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                             <Sparkles size={48}/>
                           </div>
                           <h3 className="text-2xl font-black uppercase tracking-widest text-slate-900">Synthesizing Intelligence</h3>
-                          <p className="text-xs font-bold text-slate-400 mt-4 uppercase tracking-[0.4em] animate-pulse">Consulting Secure Dossiers & Strategic Logic...</p>
+                          <p className="text-xs font-bold text-slate-400 mt-4 uppercase tracking-[0.4em] animate-pulse">Consulting Secure Cases & Strategic Logic...</p>
                         </div>
                       )}
 

@@ -140,16 +140,16 @@ export const matchCommunicationToCase = async (comm: any, cases: any[]) => {
     const ai = new GoogleGenAI({ apiKey: env?.VITE_GEMINI_API_KEY ?? "" });
     const simplifiedCases = cases.map(c => ({ id: c.id, name: `${c.defendantLastName}, ${c.defendantFirstName}`, number: c.caseNumber || '' }));
     const bodySnippet = (comm.body || '').slice(0, 2000);
-    const prompt = `You are matching an email to an existing case dossier. If the email clearly refers to a defendant name or case number (e.g. REF 2024-004) that matches a dossier, return that dossier's id. Otherwise return empty string for suggestedCaseId (new case).
+    const prompt = `You are matching an email to an existing case. If the email clearly refers to a defendant name or case number (e.g. REF 2024-004) that matches a case, return that case's id. Otherwise return empty string for suggestedCaseId (new case).
 
-In your reasoning, always refer to dossiers by defendant name and case number (e.g. "Wilson, James — REF 2024-001"). Do not use or mention dossier ids in the reasoning text. If multiple dossiers share the same defendant name, list each as "LastName, FirstName — REF number".
+In your reasoning, always refer to cases by defendant name and case number (e.g. "Wilson, James — REF 2024-001"). Do not use or mention case ids in the reasoning text. If multiple cases share the same defendant name, list each as "LastName, FirstName — REF number".
 
 Email subject: ${comm.subject || ''}
 Email body (excerpt): ${bodySnippet}
 
-Dossiers (id, name, number): ${JSON.stringify(simplifiedCases)}
+Cases (id, name, number): ${JSON.stringify(simplifiedCases)}
 
-Respond with JSON only: suggestedCaseId (string; use dossier id or "" for new case), reasoning (string; use name and case number only, no ids), confidence (number 0-1).`;
+Respond with JSON only: suggestedCaseId (string; use case id or "" for new case), reasoning (string; use name and case number only, no ids), confidence (number 0-1).`;
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -397,16 +397,16 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
       `;
     } else if (reportType === 'aging') {
       instruction = `
-        CASE AGING & VELOCITY REPORT
-        Analyze the duration of dossiers from their 'dateOpened' field.
-        Show ${greetingName} how long cases have been in the investigative pipeline.
-        Categorize by age: New (0-30 days), Seasoned (31-90 days), and Legacy (91+ days).
+        CASE AGING & PIPELINE REPORT
+        Use ONLY the data provided. The data contains activeMattersCount and three arrays (legacyMatters, seasonedMatters, newMatters) – all are ACTIVE (open) matters only.
+        State at the top that the current caseload consists of exactly [activeMattersCount] active cases (use the number from the data; do not use any other total).
+        Analyze the duration from each item's 'opened' and 'age' fields. Categorize by age: New (0-30 days), Seasoned (31-90 days), and Legacy (91+ days). Use the counts and names from the provided arrays only.
         Sign: Andrea, BRENT'S INVESTIGATE SERVICES, LLC.
       `;
     } else if (reportType === 'stagnant') {
       instruction = `
         STAGNANT ADVISORY
-        Identify dossiers with zero activity logs in the last 45 days.
+        Identify active cases with zero activity logs in the last 45 days.
         Provide ${greetingName} with a 'Risk Registry' of matters that have stalled.
         Suggest the next logical investigative step for each stagnant matter.
         Sign: Andrea, BRENT'S INVESTIGATE SERVICES, LLC.
@@ -422,7 +422,7 @@ export const generateAttorneyReport = async (reportType: string, attorneyName: s
       instruction = `
         Virtual Chief of Staff Briefing.
         Focus on operational velocity and risk registry.
-        CRITICAL READABILITY RULE: Use horizontal rules (---) between every case dossier to ensure significant white space.
+        CRITICAL READABILITY RULE: Use horizontal rules (---) between every case to ensure significant white space.
         Sign: Andrea, BRENT'S INVESTIGATE SERVICES, LLC.
       `;
     } else {

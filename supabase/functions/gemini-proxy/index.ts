@@ -66,16 +66,16 @@ async function matchCommunicationToCase(payload: {
     number: c.caseNumber || "",
   }));
   const bodySnippet = (comm.body || "").slice(0, 2000);
-  const prompt = `You are matching an email to an existing case dossier. If the email clearly refers to a defendant name or case number (e.g. REF 2024-004) that matches a dossier, return that dossier's id. Otherwise return empty string for suggestedCaseId (new case).
+  const prompt = `You are matching an email to an existing case. If the email clearly refers to a defendant name or case number (e.g. REF 2024-004) that matches a case, return that case's id. Otherwise return empty string for suggestedCaseId (new case).
 
-In your reasoning, always refer to dossiers by defendant name and case number (e.g. "Wilson, James — REF 2024-001"). Do not use or mention dossier ids in the reasoning text. If multiple dossiers share the same defendant name, list each as "LastName, FirstName — REF number".
+In your reasoning, always refer to cases by defendant name and case number (e.g. "Wilson, James — REF 2024-001"). Do not use or mention case ids in the reasoning text. If multiple cases share the same defendant name, list each as "LastName, FirstName — REF number".
 
 Email subject: ${comm.subject || ""}
 Email body (excerpt): ${bodySnippet}
 
-Dossiers (id, name, number): ${JSON.stringify(simplifiedCases)}
+Cases (id, name, number): ${JSON.stringify(simplifiedCases)}
 
-Respond with JSON only: suggestedCaseId (string; use dossier id or "" for new case), reasoning (string; use name and case number only, no ids), confidence (number 0-1).`;
+Respond with JSON only: suggestedCaseId (string; use case id or "" for new case), reasoning (string; use name and case number only, no ids), confidence (number 0-1).`;
   const responseSchema = {
     type: "object",
     properties: {
