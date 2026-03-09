@@ -676,11 +676,6 @@ const [savingProfile, setSavingProfile] = useState(false);
     caseNumber: ''
   });
   const [caseSearchQuery, setCaseSearchQuery] = useState('');
-  const caseSearchMatches = useMemo(() => {
-    const q = caseSearchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return dbCases.filter(c => (c.defendantLastName || '').toLowerCase().includes(q));
-  }, [dbCases, caseSearchQuery]);
 
   // Calendar State
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -828,6 +823,19 @@ const [savingProfile, setSavingProfile] = useState(false);
     return dbCases.filter(c => c.assigned_to === currentUserId);
   }, [dbCases, isAdmin, currentUserId]);
 
+  // Investigators only see tasks for cases assigned to them; admins see all.
+  const tasksForCurrentUser = useMemo(() => {
+    if (isAdmin) return globalTasks;
+    const caseIds = new Set(casesForCurrentUser.map(c => c.id));
+    return globalTasks.filter(t => t.caseId && caseIds.has(t.caseId));
+  }, [globalTasks, isAdmin, casesForCurrentUser]);
+
+  const caseSearchMatches = useMemo(() => {
+    const q = caseSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return casesForCurrentUser.filter(c => (c.defendantLastName || '').toLowerCase().includes(q));
+  }, [casesForCurrentUser, caseSearchQuery]);
+
   const workloadByDate = useMemo(() => {
     const map: Record<string, { total: number, activities: (CaseActivity & { defendantName: string, caseId: string })[] }> = {};
     casesForCurrentUser.forEach(c => {
@@ -945,7 +953,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   }, [casesForCurrentUser]);
 
   const sortedGlobalTasks = useMemo(() => {
-    return [...globalTasks].sort((a, b) => {
+    return [...tasksForCurrentUser].sort((a, b) => {
       const aNeed = (a as any).needsIntake ? 1 : 0;
       const bNeed = (b as any).needsIntake ? 1 : 0;
       if (bNeed !== aNeed) return bNeed - aNeed;
@@ -953,7 +961,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       if (!b.dueDate) return -1;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
-  }, [globalTasks]);
+  }, [tasksForCurrentUser]);
 
   const persistCase = async (c: Case) => {
     setIsProcessing(true);
@@ -1756,9 +1764,9 @@ const [savingProfile, setSavingProfile] = useState(false);
   }), [casesForCurrentUser]);
 
   const taskFilterCounts = useMemo(() => ({
-    Active: globalTasks.filter(t => !t.completed).length,
-    Completed: globalTasks.filter(t => t.completed).length
-  }), [globalTasks]);
+    Active: tasksForCurrentUser.filter(t => !t.completed).length,
+    Completed: tasksForCurrentUser.filter(t => t.completed).length
+  }), [tasksForCurrentUser]);
 
   // VOUCHER HUB SPECIFIC LOGIC (investigator sees only their cases here too)
   const filteredVoucherCases = useMemo(() => {
@@ -1797,13 +1805,13 @@ const [savingProfile, setSavingProfile] = useState(false);
   }, [filteredVoucherCases]);
 
   const voucherPipelinePending = useMemo(() => {
-    return dbCases
+    return casesForCurrentUser
       .filter(c => c.voucherStatus === VoucherStatus.SUBMITTED)
       .reduce((total, c) => {
         const hrs = (c.activities || []).reduce((s, a) => s + (a.hours || 0), 0);
         return total + (hrs * 45);
       }, 0);
-  }, [dbCases]);
+  }, [casesForCurrentUser]);
 
   // SYSTEM SETTINGS STATE
   const [agencyMeta, setAgencyMeta] = useState({ agency: "BRENT'S INVESTIGATIVE SERVICES", investigator: "Brent", hourlyRate: 45.00 });
@@ -1831,7 +1839,7 @@ const [savingProfile, setSavingProfile] = useState(false);
 
   const exportTasksCSV = () => {
     const headers = ["Defendant", "Directive", "Due Date", "Priority", "Completed"];
-    const rows = globalTasks.map(t => [
+    const rows = tasksForCurrentUser.map(t => [
       t.defendantName,
       t.taskDescription,
       t.dueDate,
@@ -3177,7 +3185,7 @@ const [savingProfile, setSavingProfile] = useState(false);
           onClose={() => setSelectedCaseId(null)} 
           onUpdate={persistCase} 
           activityCodes={activityCodes} 
-          tasks={globalTasks}
+          tasks={tasksForCurrentUser}
           investigators={investigators}
           jurisdictions={displayJurisdictions}
           isAdmin={isAdmin}
