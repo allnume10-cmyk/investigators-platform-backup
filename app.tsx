@@ -588,6 +588,7 @@ const AppShell: React.FC = () => {
   const [myJurisdictionId, setMyJurisdictionId] = useState<string | null>(null);
   const [myJurisdictionIds, setMyJurisdictionIds] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isInvestigatorInactive, setIsInvestigatorInactive] = useState(false);
   const isAdmin = myRole === 'global_admin' || myRole === 'admin' || myRole === 'ADMIN';
 
   const [showProfile, setShowProfile] = useState(false);
@@ -737,7 +738,7 @@ const [savingProfile, setSavingProfile] = useState(false);
 
       const { data: prof, error } = await supabase
         .from('profiles')
-        .select('full_name, role, jurisdiction_id')
+        .select('full_name, role, jurisdiction_id, is_active')
         .eq('user_id', user.id)
         .single();
 
@@ -749,9 +750,11 @@ const [savingProfile, setSavingProfile] = useState(false);
       setProfileName(prof?.full_name || '');
       setMyRole(prof?.role ?? null);
       setMyJurisdictionId(prof?.jurisdiction_id ?? null);
+      const role = (prof?.role && String(prof.role).toLowerCase()) || '';
+      const active = prof?.is_active !== false;
+      setIsInvestigatorInactive(role === 'investigator' && !active);
 
       // Load investigator's assigned jurisdictions (many-to-many). Admins skip this.
-      const role = (prof?.role && String(prof.role).toLowerCase()) || '';
       if (role === 'global_admin' || role === 'admin') {
         setMyJurisdictionIds([]);
         return;
@@ -1842,6 +1845,43 @@ const [savingProfile, setSavingProfile] = useState(false);
     link.setAttribute("download", `Task_Feed_${todayStr}.csv`);
     document.body.appendChild(link);
     link.click();
+  };
+
+  const exportMyData = () => {
+    const caseIds = new Set(casesForCurrentUser.map(c => c.id));
+    const tasksForMe = globalTasks.filter(t => caseIds.has(t.caseId));
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      profileName: profileName || undefined,
+      cases: casesForCurrentUser.map(c => ({
+        caseNumber: c.caseNumber,
+        defendantFirstName: c.defendantFirstName,
+        defendantLastName: c.defendantLastName,
+        attorneyName: c.attorneyName,
+        status: c.status,
+        voucherStatus: c.voucherStatus,
+        dateOpened: c.dateOpened,
+        dateClosed: c.dateClosed,
+        judgeName: c.judgeName,
+        nextCourtDate: c.nextCourtDate,
+        nextEventDescription: c.nextEventDescription,
+        dispositionNotes: c.dispositionNotes,
+        activities: (c.activities || []).map(a => ({ date: a.date, code: a.code, description: a.description, hours: a.hours })),
+        communications: (c.communications || []).map(comm => ({ date: comm.date, type: comm.type, content: comm.content, recipient: comm.recipient })),
+        evidenceItems: (c.evidenceItems || []).map(e => ({ description: e.description, dateRequested: e.dateRequested, requestedFrom: e.requestedFrom, dateReceived: e.dateReceived, notes: e.notes })),
+        tasks: tasksForMe.filter(t => t.caseId === c.id).map(t => ({ taskDescription: t.taskDescription, dueDate: t.dueDate, priority: t.priority, completed: t.completed }))
+      })),
+      tasksStandalone: tasksForMe
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `my_data_export_${todayStr}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -2966,6 +3006,22 @@ const [savingProfile, setSavingProfile] = useState(false);
               <div className="grid grid-cols-12 gap-10">
                 {/* Command Identity Section */}
                 <div className="col-span-4 space-y-8">
+                  {isInvestigatorInactive && (
+                    <section className="bg-amber-50 border-2 border-amber-200 rounded-[48px] p-10 shadow-sm space-y-6">
+                      <h3 className="text-[11px] font-black uppercase text-amber-700 tracking-[0.2em] flex items-center gap-3 border-b border-amber-200 pb-4">
+                        <DatabaseBackup size={16}/> Export my data
+                      </h3>
+                      <p className="text-[11px] font-medium text-slate-700 leading-relaxed">
+                        Your account is inactive. You can download a copy of your case data, activity logs, tasks, and communications below.
+                      </p>
+                      <button
+                        onClick={exportMyData}
+                        className="w-full py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-amber-700 transition-all flex items-center justify-center gap-3 active:scale-95"
+                      >
+                        <Download size={18}/> Download my data (JSON)
+                      </button>
+                    </section>
+                  )}
                   <section className="bg-white border rounded-[48px] p-10 shadow-sm space-y-8">
                     <h3 className="text-[11px] font-black uppercase text-indigo-600 tracking-[0.2em] flex items-center gap-3 border-b border-slate-50 pb-4">
                       <Building2 size={16}/> Command Identity
