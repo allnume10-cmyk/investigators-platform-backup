@@ -658,6 +658,8 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [stagnantReportFormat, setStagnantReportFormat] = useState<'plain' | 'html'>('html');
   const [pretrialReportFormat, setPretrialReportFormat] = useState<'plain' | 'html'>('html');
   const [intelReportFormat, setIntelReportFormat] = useState<'plain' | 'html'>('plain');
+  const [selectedCommandInvestigatorId, setSelectedCommandInvestigatorId] = useState<string | null>(null);
+  const [commandReportFormat, setCommandReportFormat] = useState<'plain' | 'html'>('html');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Global Tasks state
@@ -1454,10 +1456,95 @@ const [savingProfile, setSavingProfile] = useState(false);
     return `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 800px;">${parts.join('')}</div>`;
   };
 
+  const buildCommandReportHtml = (data: {
+    investigatorName: string;
+    dateStr: string;
+    activeCount: number;
+    openTaskCount: number;
+    snapshotTableRows: { Category: string; Count: string; 'Operational Meaning': string }[];
+    dailyCommandPlan?: {
+      top5OverdueTasks: { defendantName: string; caseNumber: string; attorney: string; summaryOfTask: string; daysOverdue: number }[];
+      top5VoucherOpportunities: { defendantName: string; caseNumber: string; attorney: string; dateClosed: string }[];
+      top5NewNotTouched: { defendantName: string; caseNumber: string; attorney: string; dateOpened: string }[];
+      top5TrialReadiness: { defendantName: string; caseNumber: string; attorney: string; courtDate: string; event: string }[];
+      top5Stagnant: { defendantName: string; caseNumber: string; attorney: string; dateOpened: string; daysSinceLastActivity: number }[];
+      weeklyGamePlanRows: { Day: string; Focus: string; Goal: string }[];
+    };
+    courtThisWeek: { name: string; caseNumber: string; event: string; date: string }[];
+    overdueTasks: { defendantName: string; taskDescription: string; dueDate: string; caseNumber: string }[];
+    caseloadSnapshot: { defendant: string; caseNumber: string; status: string; nextStep: string }[];
+  }): string => {
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const tableStyle = 'border-collapse: collapse; width: 100%; margin-bottom: 1rem; font-size: 13px;';
+    const thStyle = 'border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; background: #f1f5f9; font-weight: 700;';
+    const tdStyle = 'border: 1px solid #e2e8f0; padding: 8px 12px;';
+
+    const section = (title: string, headers: string[], rows: Record<string, string>[]) => {
+      const thead = `<thead><tr>${headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr></thead>`;
+      const body = rows.length === 0
+        ? `<tbody><tr><td colspan="${headers.length}" style="${tdStyle}">None.</td></tr></tbody>`
+        : `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td style="${tdStyle}">${esc(String(r[h] ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      const table = `<table style="${tableStyle}">${thead}${body}</table>`;
+      return title ? `<h3 style="margin: 1rem 0 0.35rem; font-size: 14px;">${esc(title)}</h3>${table}` : table;
+    };
+
+    const snapshotRows = data.snapshotTableRows || [];
+    const plan = data.dailyCommandPlan;
+    const parts: string[] = [
+      `<div style="font-family: system-ui, sans-serif; color: #334155; max-width: 720px;">`,
+      `<h2 style="margin: 0 0 0.25rem; font-size: 18px;">Investigator Command Dashboard</h2>`,
+      `<p style="margin: 0 0 1rem; font-size: 13px; color: #475569;">${esc(data.investigatorName)} · ${esc(data.dateStr)} · ${data.activeCount} active cases · ${data.openTaskCount} open tasks</p>`,
+      section('Caseload Snapshot', ['Category', 'Count', 'Operational Meaning'], snapshotRows.map(r => ({ Category: r.Category, Count: r.Count, 'Operational Meaning': r['Operational Meaning'] })))
+    ];
+
+    if (plan) {
+      parts.push(`<h3 style="margin: 1.5rem 0 0.5rem; font-size: 14px;">Investigator Daily Command Plan</h3>`);
+      parts.push(`<p style="margin: 0 0 1rem; font-size: 13px; color: #475569;">Each day has a focus category with the top 5 cases; work through these cases first. If finished, use the dashboard to continue working within that category.</p>`);
+
+      parts.push(`<h4 style="margin: 1.25rem 0 0.35rem; font-size: 13px;">Monday – Overdue Tasks</h4>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; color: #475569;">Move Investigations Forward – Goal: Reduce investigative backlog.</p>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; font-weight: 700;">Top 5 Overdue Tasks:</p>`);
+      parts.push(section('', ['Defendant Name', 'Case Number', 'Attorney', 'Summary of Task', 'Days Overdue'], (plan.top5OverdueTasks || []).map(r => ({ 'Defendant Name': r.defendantName, 'Case Number': r.caseNumber, Attorney: r.attorney, 'Summary of Task': r.summaryOfTask, 'Days Overdue': String(r.daysOverdue) }))));
+
+      parts.push(`<h4 style="margin: 1.25rem 0 0.35rem; font-size: 13px;">Tuesday – Voucher Pipeline</h4>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; color: #475569;">Capture Billing Opportunities – Goal: Submit vouchers and capture revenue.</p>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; font-weight: 700;">Top 5 voucher opportunities:</p>`);
+      parts.push(section('', ['Defendant Name', 'Case Number', 'Attorney', 'Date Closed'], (plan.top5VoucherOpportunities || []).map(r => ({ 'Defendant Name': r.defendantName, 'Case Number': r.caseNumber, Attorney: r.attorney, 'Date Closed': r.dateClosed }))));
+
+      parts.push(`<h4 style="margin: 1.25rem 0 0.35rem; font-size: 13px;">Wednesday – New Case Activation</h4>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; color: #475569;">Establish Initial Activity – Goal: Ensure every case has investigative movement.</p>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; font-weight: 700;">Top 5 new cases not yet touched:</p>`);
+      parts.push(section('', ['Defendant', 'Case Number', 'Attorney', 'Date Opened'], (plan.top5NewNotTouched || []).map(r => ({ Defendant: r.defendantName, 'Case Number': r.caseNumber, Attorney: r.attorney, 'Date Opened': r.dateOpened }))));
+
+      parts.push(`<h4 style="margin: 1.25rem 0 0.35rem; font-size: 13px;">Thursday – Trial Readiness</h4>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; color: #475569;">Prepare for Court – Goal: Prepare investigation for upcoming court events.</p>`);
+      parts.push(section('', ['Defendant', 'Case Number', 'Attorney', 'Court Date', 'Event'], (plan.top5TrialReadiness || []).map(r => ({ Defendant: r.defendantName, 'Case Number': r.caseNumber, Attorney: r.attorney, 'Court Date': r.courtDate, Event: r.event }))));
+
+      parts.push(`<h4 style="margin: 1.25rem 0 0.35rem; font-size: 13px;">Friday – Stagnant Case Review</h4>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; color: #475569;">Strategic Case Movement – Goal: Identify next investigative step.</p>`);
+      parts.push(`<p style="margin: 0 0 0.35rem; font-size: 12px; font-weight: 700;">Top 5 Stagnant Cases (45+ days):</p>`);
+      parts.push(section('', ['Defendant', 'Case Number', 'Attorney', 'Date Opened', 'Days Since Last Activity'], (plan.top5Stagnant || []).map(r => ({ Defendant: r.defendantName, 'Case Number': r.caseNumber, Attorney: r.attorney, 'Date Opened': r.dateOpened, 'Days Since Last Activity': String(r.daysSinceLastActivity) }))));
+
+      parts.push(`<h3 style="margin: 1.5rem 0 0.5rem; font-size: 14px;">Weekly Game Plan</h3>`);
+      parts.push(section('', ['Day', 'Focus', 'Goal'], (plan.weeklyGamePlanRows || []).map(r => ({ Day: r.Day, Focus: r.Focus, Goal: r.Goal }))));
+    }
+
+    parts.push(`<p style="margin: 1.25rem 0 0.25rem; font-size: 12px; color: #64748b;">Andrea, Brent's Investigative Services</p>`);
+    parts.push(`</div>`);
+    return parts.join('');
+  };
+
   const handleExecuteReport = async (reportId: string) => {
     if (reportId === 'intel' && !isAdmin) {
       setIsGeneratingReport(false);
       return;
+    }
+    if (reportId === 'command') {
+      if (!isAdmin) { setIsGeneratingReport(false); return; }
+      if (!selectedCommandInvestigatorId) {
+        alert('Please select an investigator first.');
+        return;
+      }
     }
     setIsGeneratingReport(true);
     setGeneratedReport(null);
@@ -1502,7 +1589,11 @@ const [savingProfile, setSavingProfile] = useState(false);
       };
 
       let filtered = dbCases;
-      if (selectedAttorneyFilter) filtered = dbCases.filter(c => c.attorneyName === selectedAttorneyFilter);
+      if (reportId === 'command' && selectedCommandInvestigatorId) {
+        filtered = dbCases.filter(c => c.assigned_to === selectedCommandInvestigatorId);
+      } else if (selectedAttorneyFilter) {
+        filtered = dbCases.filter(c => c.attorneyName === selectedAttorneyFilter);
+      }
 
       let reportData: any = {};
       if (reportId === 'weekly') {
@@ -1579,6 +1670,100 @@ const [savingProfile, setSavingProfile] = useState(false);
         }));
         trialMapped.sort((a, b) => (a.date || '').localeCompare(b.date || '')); // court date earliest to latest
         reportData = { upcomingTrials: trialMapped };
+      } else if (reportId === 'command') {
+        const invName = investigators.find(i => i.user_id === selectedCommandInvestigatorId)?.full_name ?? 'Investigator';
+        const caseIds = new Set(filtered.map((c: Case) => c.id));
+        const tasksInScope = globalTasks.filter(t => caseIds.has(t.caseId));
+        const openCases = filtered.filter((c: Case) => c.status !== CaseStatus.CLOSED);
+        const getLastActivityDate = (c: Case) => {
+          const logs = c.activities || [];
+          return logs.length > 0 ? [...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date : c.dateOpened;
+        };
+        const next7 = new Date(); next7.setDate(next7.getDate() + 7);
+        const next7Str = next7.toLocaleDateString('en-CA');
+        const next30 = new Date(); next30.setDate(next30.getDate() + 30);
+        const next30Str = next30.toLocaleDateString('en-CA');
+        const courtThisWeek = openCases.filter(c => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next7Str)
+          .sort((a, b) => (a.nextCourtDate || '').localeCompare(b.nextCourtDate || ''))
+          .map(c => ({ name: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber ?? '', event: c.nextEventDescription ?? '', date: toMMDDYYYY(c.nextCourtDate) }));
+        const overdueTasksList = tasksInScope.filter(t => !t.completed && t.dueDate < todayStr)
+          .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+          .map(t => ({ defendantName: t.defendantName, taskDescription: t.taskDescription, dueDate: toMMDDYYYY(t.dueDate), caseNumber: t.caseNumber ?? '' }));
+        const overdueCount = overdueTasksList.length;
+        const tasksDueThisWeekCount = tasksInScope.filter(t => !t.completed && t.dueDate >= todayStr && t.dueDate <= next7Str).length;
+        const stagnant = openCases.filter(c => calculateDaysDiff(getLastActivityDate(c)) >= 44);
+        const trialReadinessRe = /trial|non-jury trial|trial readiness|motion hearing/i;
+        const trialReadinessCount = openCases.filter((c: Case) => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next30Str && trialReadinessRe.test(c.nextEventDescription || '')).length;
+        const closedAwaitingVoucher = filtered.filter((c: Case) => c.status === CaseStatus.CLOSED && c.voucherStatus === VoucherStatus.OPEN);
+        const fourteenStr = new Date(); fourteenStr.setDate(fourteenStr.getDate() - 14); const fourteenStrVal = fourteenStr.toLocaleDateString('en-CA');
+        const newNotTouched = openCases.filter(c => c.dateOpened >= fourteenStrVal && (c.activities || []).length <= 1);
+        const snapshotTableRows = [
+          { Category: 'Overdue Tasks', Count: String(overdueCount), 'Operational Meaning': 'Investigative work past due' },
+          { Category: 'Tasks Due this week', Count: String(tasksDueThisWeekCount), 'Operational Meaning': 'Upcoming deadlines' },
+          { Category: 'Stagnant cases (44+ days)', Count: String(stagnant.length), 'Operational Meaning': 'Cases needing movement' },
+          { Category: 'Trial Readiness (within 30 days)', Count: String(trialReadinessCount), 'Operational Meaning': 'Court preparation required' },
+          { Category: 'Closed Cases Awaiting Voucher', Count: String(closedAwaitingVoucher.length), 'Operational Meaning': 'Immediate revenue capture' },
+          { Category: 'New cases not yet touched', Count: String(newNotTouched.length), 'Operational Meaning': 'Cases needing first activity' }
+        ];
+        const caseloadSnapshot = openCases.map((c: Case) => {
+          const openT = tasksInScope.filter(t => t.caseId === c.id && !t.completed).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+          const daysStagnant = calculateDaysDiff(getLastActivityDate(c));
+          let nextStep = openT ? openT.taskDescription : (daysStagnant >= 44 ? 'Touch – stagnant' : 'Log activity');
+          return { defendant: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber ?? '', status: c.voucherStatus, nextStep };
+        }).sort((a, b) => a.defendant.localeCompare(b.defendant));
+
+        const getCase = (id: string) => filtered.find((c: Case) => c.id === id);
+        const top5OverdueTasks = tasksInScope.filter(t => !t.completed && t.dueDate < todayStr)
+          .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+          .slice(0, 5)
+          .map(t => {
+            const c = getCase(t.caseId) as Case | undefined;
+            return { defendantName: t.defendantName, caseNumber: t.caseNumber ?? '', attorney: c?.attorneyName ?? '', summaryOfTask: t.taskDescription, daysOverdue: calculateDaysDiff(t.dueDate) };
+          });
+        const top5VoucherOpportunities = closedAwaitingVoucher
+          .slice(0, 5)
+          .map((c: Case) => ({ defendantName: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber ?? '', attorney: c.attorneyName ?? '', dateClosed: toMMDDYYYY(c.dateClosed) }));
+        const top5NewNotTouched = [...newNotTouched]
+          .sort((a, b) => (a.dateOpened || '').localeCompare(b.dateOpened || ''))
+          .slice(0, 5)
+          .map((c: Case) => ({ defendantName: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber ?? '', attorney: c.attorneyName ?? '', dateOpened: toMMDDYYYY(c.dateOpened) }));
+        const trialReadinessCases = openCases.filter((c: Case) => c.nextCourtDate && c.nextCourtDate >= todayStr && c.nextCourtDate <= next30Str && trialReadinessRe.test(c.nextEventDescription || ''));
+        const top5TrialReadiness = trialReadinessCases
+          .sort((a, b) => (a.nextCourtDate || '').localeCompare(b.nextCourtDate || ''))
+          .slice(0, 5)
+          .map((c: Case) => ({ defendantName: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber ?? '', attorney: c.attorneyName ?? '', courtDate: toMMDDYYYY(c.nextCourtDate), event: c.nextEventDescription ?? '' }));
+        const stagnant45 = openCases.filter(c => calculateDaysDiff(getLastActivityDate(c)) >= 45);
+        const top5Stagnant = stagnant45
+          .map((c: Case) => ({ c, daysSince: calculateDaysDiff(getLastActivityDate(c)) }))
+          .sort((a, b) => b.daysSince - a.daysSince)
+          .slice(0, 5)
+          .map(({ c, daysSince }) => ({ defendantName: `${c.defendantLastName}, ${c.defendantFirstName}`, caseNumber: c.caseNumber ?? '', attorney: c.attorneyName ?? '', dateOpened: toMMDDYYYY(c.dateOpened), daysSinceLastActivity: daysSince }));
+        const weeklyGamePlanRows = [
+          { Day: 'Monday', Focus: 'Overdue Tasks', Goal: 'Move stalled investigations' },
+          { Day: 'Tuesday', Focus: 'Voucher Pipeline', Goal: 'Capture billing' },
+          { Day: 'Wednesday', Focus: 'New Cases', Goal: 'Establish activity' },
+          { Day: 'Thursday', Focus: 'Trial Readiness', Goal: 'Prepare for court' },
+          { Day: 'Friday', Focus: 'Stagnant Cases', Goal: 'Strategic case review' }
+        ];
+
+        reportData = {
+          investigatorName: invName,
+          dateStr: toMMDDYYYY(todayStr),
+          activeCount: openCases.length,
+          openTaskCount: tasksInScope.filter(t => !t.completed).length,
+          snapshotTableRows,
+          dailyCommandPlan: {
+            top5OverdueTasks,
+            top5VoucherOpportunities,
+            top5NewNotTouched,
+            top5TrialReadiness,
+            top5Stagnant,
+            weeklyGamePlanRows
+          },
+          courtThisWeek,
+          overdueTasks: overdueTasksList,
+          caseloadSnapshot
+        };
       } else if (reportId === 'intel') {
         const caseIds = new Set(filtered.map((c: Case) => c.id));
         const tasksInScope = globalTasks.filter(t => caseIds.has(t.caseId));
@@ -1693,6 +1878,9 @@ const [savingProfile, setSavingProfile] = useState(false);
         setGeneratedReportIsHtml(true);
       } else if (reportId === 'pretrial' && pretrialReportFormat === 'html' && reportData.upcomingTrials !== undefined) {
         setGeneratedReport(buildPretrialReportHtml(reportData, selectedAttorneyFilter));
+        setGeneratedReportIsHtml(true);
+      } else if (reportId === 'command' && reportData.investigatorName !== undefined) {
+        setGeneratedReport(buildCommandReportHtml(reportData));
         setGeneratedReportIsHtml(true);
       } else if (reportId === 'intel' && intelReportFormat === 'html' && reportData.snapshot !== undefined) {
         setGeneratedReport(buildIntelReportHtml(reportData));
@@ -2711,16 +2899,32 @@ const [savingProfile, setSavingProfile] = useState(false);
                 <div className="col-span-4 space-y-8">
                   <div className="bg-white border rounded-[32px] p-8 shadow-sm space-y-6">
                     <p className="text-[11px] font-black uppercase text-indigo-600 tracking-widest">Step 1: Select Intelligence Context</p>
-                    <select 
-                      value={selectedAttorneyFilter || ''} 
-                      onChange={(e) => setSelectedAttorneyFilter(e.target.value || null)}
-                      className="w-full p-4 bg-slate-50 border rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
-                    >
-                      <option value="">GLOBAL (ALL ATTORNEYS)</option>
-                      {uniqueAttorneys.map(atty => (
-                        <option key={atty} value={atty}>{atty.toUpperCase()}</option>
-                      ))}
-                    </select>
+                    {selectedReportId === 'command' ? (
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Investigator (required)</label>
+                        <select
+                          value={selectedCommandInvestigatorId || ''}
+                          onChange={(e) => setSelectedCommandInvestigatorId(e.target.value || null)}
+                          className="w-full p-4 bg-slate-50 border rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
+                        >
+                          <option value="">Select investigator...</option>
+                          {investigators.map(inv => (
+                            <option key={inv.user_id} value={inv.user_id}>{investigatorLabel(inv)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <select 
+                        value={selectedAttorneyFilter || ''} 
+                        onChange={(e) => setSelectedAttorneyFilter(e.target.value || null)}
+                        className="w-full p-4 bg-slate-50 border rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
+                      >
+                        <option value="">GLOBAL (ALL ATTORNEYS)</option>
+                        {uniqueAttorneys.map(atty => (
+                          <option key={atty} value={atty}>{atty.toUpperCase()}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -2732,7 +2936,10 @@ const [savingProfile, setSavingProfile] = useState(false);
                         { id: 'aging', label: 'Case Aging & Pipeline', icon: History, color: 'blue', desc: 'Analysis of how long active cases have been in the pipeline from intake to resolution.' },
                         { id: 'stagnant', label: 'Stagnant Advisory', icon: Snowflake, color: 'amber', desc: 'Critical warning for active cases with zero activity in 45+ days.' },
                         { id: 'pretrial', label: 'Pre-Trial Readiness', icon: Target, color: 'emerald', desc: 'Strategic preparation status for upcoming trial dates.' },
-                        ...(isAdmin ? [{ id: 'intel', label: 'Global Intel Brief', icon: Sparkles, color: 'indigo', desc: 'AI-generated operational synthesis for management.' }] : [])
+                        ...(isAdmin ? [
+                          { id: 'command', label: 'Investigator Command Dashboard', icon: Gauge, color: 'emerald', desc: 'Focused action dashboard for one investigator (admin only).' },
+                          { id: 'intel', label: 'Global Intel Brief', icon: Sparkles, color: 'indigo', desc: 'AI-generated operational synthesis for management.' }
+                        ] : [])
                       ].map(r => (
                         <div 
                           key={r.id} 
@@ -2747,21 +2954,21 @@ const [savingProfile, setSavingProfile] = useState(false);
                         </div>
                       ))}
                     </div>
-                    {(selectedReportId === 'weekly' || selectedReportId === 'aged' || selectedReportId === 'aging' || selectedReportId === 'stagnant' || selectedReportId === 'pretrial' || selectedReportId === 'intel') && (
+                    {(selectedReportId === 'weekly' || selectedReportId === 'aged' || selectedReportId === 'aging' || selectedReportId === 'stagnant' || selectedReportId === 'pretrial' || selectedReportId === 'command' || selectedReportId === 'intel') && (
                       <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
                         <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Output format</p>
                         <div className="flex rounded-xl bg-white p-1 border border-slate-100 shadow-inner">
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); selectedReportId === 'aging' && setAgingReportFormat('plain'); selectedReportId === 'stagnant' && setStagnantReportFormat('plain'); selectedReportId === 'pretrial' && setPretrialReportFormat('plain'); selectedReportId === 'intel' && setIntelReportFormat('plain'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : selectedReportId === 'aged' ? agedReportFormat === 'plain' : selectedReportId === 'aging' ? agingReportFormat === 'plain' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'plain' : selectedReportId === 'pretrial' ? pretrialReportFormat === 'plain' : intelReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('plain'); selectedReportId === 'aged' && setAgedReportFormat('plain'); selectedReportId === 'aging' && setAgingReportFormat('plain'); selectedReportId === 'stagnant' && setStagnantReportFormat('plain'); selectedReportId === 'pretrial' && setPretrialReportFormat('plain'); selectedReportId === 'command' && setCommandReportFormat('plain'); selectedReportId === 'intel' && setIntelReportFormat('plain'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'plain' : selectedReportId === 'aged' ? agedReportFormat === 'plain' : selectedReportId === 'aging' ? agingReportFormat === 'plain' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'plain' : selectedReportId === 'pretrial' ? pretrialReportFormat === 'plain' : selectedReportId === 'command' ? commandReportFormat === 'plain' : intelReportFormat === 'plain') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             Plain text
                           </button>
                           <button
                             type="button"
-                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); selectedReportId === 'aging' && setAgingReportFormat('html'); selectedReportId === 'stagnant' && setStagnantReportFormat('html'); selectedReportId === 'pretrial' && setPretrialReportFormat('html'); selectedReportId === 'intel' && setIntelReportFormat('html'); }}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : selectedReportId === 'aged' ? agedReportFormat === 'html' : selectedReportId === 'aging' ? agingReportFormat === 'html' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'html' : selectedReportId === 'pretrial' ? pretrialReportFormat === 'html' : intelReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => { selectedReportId === 'weekly' && setWeeklyReportFormat('html'); selectedReportId === 'aged' && setAgedReportFormat('html'); selectedReportId === 'aging' && setAgingReportFormat('html'); selectedReportId === 'stagnant' && setStagnantReportFormat('html'); selectedReportId === 'pretrial' && setPretrialReportFormat('html'); selectedReportId === 'command' && setCommandReportFormat('html'); selectedReportId === 'intel' && setIntelReportFormat('html'); }}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${(selectedReportId === 'weekly' ? weeklyReportFormat === 'html' : selectedReportId === 'aged' ? agedReportFormat === 'html' : selectedReportId === 'aging' ? agingReportFormat === 'html' : selectedReportId === 'stagnant' ? stagnantReportFormat === 'html' : selectedReportId === 'pretrial' ? pretrialReportFormat === 'html' : selectedReportId === 'command' ? commandReportFormat === 'html' : intelReportFormat === 'html') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                           >
                             HTML (tables)
                           </button>
