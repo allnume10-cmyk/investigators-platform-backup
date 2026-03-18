@@ -40,8 +40,13 @@ export function Auth({ onAuthed }: { onAuthed: () => void }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl p-6">
-        <h1 className="text-xl font-black mb-1">Investigative Case Manager</h1>
-        <p className="text-sm text-slate-600 mb-6">
+        <h1 className="font-brand text-2xl font-bold tracking-tight text-slate-900 mb-0.5">
+          TIER CaseFlow™
+        </h1>
+        <p className="font-brand text-sm font-medium text-slate-600 mb-6">
+          Investigative Workflow Platform
+        </p>
+        <p className="text-sm text-slate-500 mb-6">
           Sign in to access your dashboard.
         </p>
 
