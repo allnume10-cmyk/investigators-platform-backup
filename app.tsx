@@ -484,7 +484,16 @@ const CaseJacket: React.FC<{
                     const meta = activityCodes.find(ac => ac.code === code);
                     setNewLog({...newLog, code, description: meta?.defaultNarrative || '', hours: (meta?.defaultHours || 0.0).toString()});
                   }} className="w-full p-3 bg-white rounded-xl text-[11px] font-black uppercase" title="Activity code and name">{activityCodes.map(ac => <option key={ac.id} value={ac.code}>{ac.code} – {ac.label}</option>)}</select></div>
-                  <div className="col-span-4 space-y-1"><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Narrative</p><input value={newLog.description} onChange={e => setNewLog({...newLog, description: e.target.value})} className="w-full p-3 bg-white rounded-xl text-[11px] font-bold outline-none" placeholder="Enter narrative..."/></div>
+                  <div className="col-span-4 space-y-1">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Narrative</p>
+                    <textarea
+                      value={newLog.description}
+                      onChange={e => setNewLog({...newLog, description: e.target.value})}
+                      rows={2}
+                      className="w-full p-3 bg-white rounded-xl text-[11px] font-bold outline-none resize-y min-h-[52px] leading-relaxed"
+                      placeholder="Enter narrative..."
+                    />
+                  </div>
                   <div className="col-span-1 space-y-1"><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Hrs</p><input type="number" step="0.1" value={newLog.hours} onChange={e => setNewLog({...newLog, hours: e.target.value})} className="w-full p-3 bg-white rounded-xl text-[11px] font-black outline-none" placeholder="0.1"/></div>
                   <div className="col-span-3 flex gap-2"><button onClick={isRecording ? stopRecording : startRecording} className={`flex-1 py-3.5 rounded-xl font-black uppercase text-[10px] transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 ${isRecording ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isRecording ? <Square size={14}/> : <Mic size={14}/>} {isRecording ? 'Stop' : 'Voice'}</button><button onClick={handleLogActivity} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-white hover:text-indigo-600 transition-all shadow-lg active:scale-95">Sync</button></div>
                 </div>
@@ -503,7 +512,13 @@ const CaseJacket: React.FC<{
                       </div>
                       <div className="flex flex-col gap-2 flex-1 min-w-0">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Narrative</label>
-                        <input value={a.description || ''} onChange={e => updateActivity(a.id, { description: e.target.value })} className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500" placeholder="Enter narrative..."/>
+                        <textarea
+                          value={a.description || ''}
+                          onChange={e => updateActivity(a.id, { description: e.target.value })}
+                          rows={2}
+                          className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500 resize-y min-h-[44px] leading-relaxed"
+                          placeholder="Enter narrative..."
+                        />
                       </div>
                       <div className="flex flex-col gap-2 shrink-0 w-16">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Hrs</label>
