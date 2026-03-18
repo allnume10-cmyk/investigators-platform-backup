@@ -36,12 +36,27 @@ import { Auth } from './Auth';
 type InvestigatorProfile = {
   user_id: string;
   full_name: string | null;
+  initials?: string | null;
+  agency_name?: string | null;
 };
 
 const investigatorLabel = (p: InvestigatorProfile) =>
   (p.full_name && p.full_name.trim().length > 0)
     ? p.full_name
     : p.user_id;
+/** Sidebar initials: use profile initials or first 2 chars of full name, or "PRO". */
+const sidebarInitials = (p: { initials?: string | null; full_name?: string | null }) => {
+  const i = (p.initials || '').trim();
+  if (i.length) return i.slice(0, 6).toUpperCase();
+  const n = (p.full_name || '').trim();
+  if (n.length >= 2) return n.slice(0, 2).toUpperCase();
+  return 'PRO';
+};
+/** Sidebar subtitle: use profile agency_name or default. */
+const sidebarSubtitle = (p: { agency_name?: string | null }) => {
+  const a = (p.agency_name || '').trim();
+  return a.length ? a : 'Mission Intelligence';
+};
 
 type LifecycleFilter = 'Active' | 'Unscheduled' | 'Archive';
 type CaseSort = 'Defendant' | 'Court Date' | 'Attorney' | 'Date Opened';
@@ -608,8 +623,12 @@ const AppShell: React.FC = () => {
 
   const [showProfile, setShowProfile] = useState(false);
 const [profileName, setProfileName] = useState('');
+const [profileInitials, setProfileInitials] = useState('');
+const [profileAgencyName, setProfileAgencyName] = useState('');
 const [savingProfile, setSavingProfile] = useState(false);
-
+  /** Admin: per-investigator sidebar branding edits (initials, agency_name). */
+  const [investigatorDisplayEdits, setInvestigatorDisplayEdits] = useState<Record<string, { initials: string; agency_name: string }>>({});
+  const [savingInvestigatorDisplay, setSavingInvestigatorDisplay] = useState<string | null>(null);
 
   const [globalTasks, setGlobalTasks] = useState<GlobalTask[]>([]);
   const [activityCodes, setActivityCodes] = useState<ActivityCode[]>(INITIAL_ACTIVITY_CODES);
@@ -750,7 +769,7 @@ const [savingProfile, setSavingProfile] = useState(false);
 
       const { data: prof, error } = await supabase
         .from('profiles')
-        .select('full_name, role, jurisdiction_id, is_active')
+        .select('full_name, role, jurisdiction_id, is_active, initials, agency_name')
         .eq('user_id', user.id)
         .single();
 
@@ -760,6 +779,8 @@ const [savingProfile, setSavingProfile] = useState(false);
       }
 
       setProfileName(prof?.full_name || '');
+      setProfileInitials(prof?.initials ?? '');
+      setProfileAgencyName(prof?.agency_name ?? '');
       setMyRole(prof?.role ?? null);
       setMyJurisdictionId(prof?.jurisdiction_id ?? null);
       const role = (prof?.role && String(prof.role).toLowerCase()) || '';
@@ -799,7 +820,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       if (!isAdmin) {
         const { data: me } = await supabase
           .from('profiles')
-          .select('user_id, full_name')
+          .select('user_id, full_name, initials, agency_name')
           .eq('user_id', user.id)
           .single();
         setInvestigators(me ? [me as InvestigatorProfile] : []);
@@ -809,7 +830,7 @@ const [savingProfile, setSavingProfile] = useState(false);
       // Load all profiles then filter by role (case-insensitive) so DB enum casing (e.g. Investigator) doesn't matter
       const { data: list, error } = await supabase
         .from('profiles')
-        .select('user_id, full_name, role')
+        .select('user_id, full_name, role, initials, agency_name')
         .order('full_name', { ascending: true });
 
       if (error) {
@@ -820,10 +841,27 @@ const [savingProfile, setSavingProfile] = useState(false);
 
       const invList = (list || [])
         .filter((p: { role?: string }) => p.role && String(p.role).toLowerCase() === 'investigator')
-        .map((p: { user_id: string; full_name: string | null }) => ({ user_id: p.user_id, full_name: p.full_name }));
+        .map((p: { user_id: string; full_name: string | null; initials?: string | null; agency_name?: string | null }) => ({
+          user_id: p.user_id,
+          full_name: p.full_name,
+          initials: p.initials ?? null,
+          agency_name: p.agency_name ?? null,
+        }));
       setInvestigators(invList);
     })();
   }, [isAdmin, myRole]);
+
+  // Sync admin edit state from investigators list (initials / agency_name).
+  useEffect(() => {
+    if (!isAdmin || investigators.length === 0) return;
+    setInvestigatorDisplayEdits(prev => ({
+      ...prev,
+      ...Object.fromEntries(investigators.map(inv => [
+        inv.user_id,
+        { initials: inv.initials ?? '', agency_name: inv.agency_name ?? '' },
+      ])),
+    }));
+  }, [isAdmin, investigators]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -1081,7 +1119,12 @@ const [savingProfile, setSavingProfile] = useState(false);
   
       const { error } = await supabase
         .from('profiles')
-        .upsert({ user_id: user.id, full_name: profileName });
+        .upsert({
+          user_id: user.id,
+          full_name: profileName,
+          initials: profileInitials.trim() || null,
+          agency_name: profileAgencyName.trim() || null,
+        });
   
       if (error) throw error;
   
@@ -1090,6 +1133,31 @@ const [savingProfile, setSavingProfile] = useState(false);
       alert(`Could not save profile: ${e.message || e}`);
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const saveInvestigatorDisplay = async (userId: string) => {
+    const edits = investigatorDisplayEdits[userId];
+    if (!edits) return;
+    setSavingInvestigatorDisplay(userId);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          initials: edits.initials.trim() || null,
+          agency_name: edits.agency_name.trim() || null,
+        })
+        .eq('user_id', userId);
+      if (error) throw error;
+      setInvestigators(prev => prev.map(inv =>
+        inv.user_id === userId
+          ? { ...inv, initials: edits.initials.trim() || null, agency_name: edits.agency_name.trim() || null }
+          : inv
+      ));
+    } catch (e: any) {
+      alert(`Could not save: ${e.message || e}`);
+    } finally {
+      setSavingInvestigatorDisplay(null);
     }
   };
 
@@ -2100,8 +2168,12 @@ const [savingProfile, setSavingProfile] = useState(false);
       <style dangerouslySetInnerHTML={{ __html: '[data-mission-alert-header]{font-size:9px!important;line-height:1!important;font-weight:900!important;}' }} />
       <aside className="w-64 bg-slate-900 text-white flex flex-col h-full fixed top-0 left-0 z-[100] shadow-2xl">
         <div className="p-8 border-b border-slate-800 flex flex-col items-center gap-4">
-          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-2xl border border-indigo-400">PRO</div>
-          <h2 className="font-black text-[10px] uppercase tracking-widest text-slate-100">Mission Intelligence</h2>
+          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-2xl border border-indigo-400">
+            {sidebarInitials({ initials: profileInitials, full_name: profileName })}
+          </div>
+          <h2 className="font-black text-[10px] uppercase tracking-widest text-slate-100 text-center leading-tight">
+            {sidebarSubtitle({ agency_name: profileAgencyName })}
+          </h2>
         </div>
         <nav className="flex-1 p-5 space-y-1.5 mt-4">
           {[ 
@@ -3275,6 +3347,63 @@ const [savingProfile, setSavingProfile] = useState(false);
                     </div>
                   </section>
 
+                  {/* Admin: Investigator sidebar branding */}
+                  {isAdmin && (
+                    <section className="bg-white border rounded-[48px] p-10 shadow-sm space-y-6">
+                      <h3 className="text-[11px] font-black uppercase text-indigo-600 tracking-[0.2em] flex items-center gap-3 border-b border-slate-50 pb-4">
+                        Users <span className="text-slate-400 font-normal">Sidebar branding</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Set initials and agency name for each investigator. These appear in the app sidebar when they sign in. Investigators can also set their own in My Profile.
+                      </p>
+                      <div className="space-y-4 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
+                        {investigators.map(inv => {
+                          const edits = investigatorDisplayEdits[inv.user_id] ?? { initials: '', agency_name: '' };
+                          return (
+                            <div key={inv.user_id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                              <p className="text-[11px] font-bold text-slate-800">{investigatorLabel(inv)}</p>
+                              <div className="grid grid-cols-[1fr_2fr] gap-3 items-center">
+                                <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400">Initials</label>
+                                  <input
+                                    value={edits.initials}
+                                    onChange={e => setInvestigatorDisplayEdits(prev => ({
+                                      ...prev,
+                                      [inv.user_id]: { ...edits, initials: e.target.value },
+                                    }))}
+                                    className="mt-1 w-full p-2 rounded-lg border border-slate-200 text-[11px] font-bold uppercase"
+                                    placeholder="e.g. BI"
+                                    maxLength={6}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400">Agency name</label>
+                                  <input
+                                    value={edits.agency_name}
+                                    onChange={e => setInvestigatorDisplayEdits(prev => ({
+                                      ...prev,
+                                      [inv.user_id]: { ...edits, agency_name: e.target.value },
+                                    }))}
+                                    className="mt-1 w-full p-2 rounded-lg border border-slate-200 text-[11px]"
+                                    placeholder="e.g. Brent's Investigative Services, LLC"
+                                  />
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => saveInvestigatorDisplay(inv.user_id)}
+                                disabled={savingInvestigatorDisplay === inv.user_id}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-700 disabled:opacity-50"
+                              >
+                                {savingInvestigatorDisplay === inv.user_id ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+
                   {/* System Utilities Section */}
                   <section className="bg-slate-900 text-white border rounded-[48px] p-10 shadow-2xl space-y-8">
                     <h3 className="text-[11px] font-black uppercase text-indigo-400 tracking-[0.2em] flex items-center gap-3 border-b border-white/5 pb-4">
@@ -3420,7 +3549,7 @@ const [savingProfile, setSavingProfile] = useState(false);
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <div className="text-lg font-bold">My Profile</div>
             <div className="text-xs text-slate-500 mt-1">
-              This name is what admins see in assignment dropdowns.
+              Full name is used in assignment dropdowns. Initials and agency name appear in the sidebar.
             </div>
 
             <div className="mt-4">
@@ -3430,6 +3559,25 @@ const [savingProfile, setSavingProfile] = useState(false);
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
                 placeholder="e.g., Gregory Brent"
+              />
+            </div>
+            <div className="mt-4">
+              <label className="text-xs font-semibold text-slate-600">Sidebar initials</label>
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={profileInitials}
+                onChange={(e) => setProfileInitials(e.target.value)}
+                placeholder="e.g., BI"
+                maxLength={6}
+              />
+            </div>
+            <div className="mt-4">
+              <label className="text-xs font-semibold text-slate-600">Agency name (sidebar)</label>
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={profileAgencyName}
+                onChange={(e) => setProfileAgencyName(e.target.value)}
+                placeholder="e.g., Brent's Investigative Services, LLC"
               />
             </div>
 
