@@ -2084,8 +2084,8 @@ const [savingProfile, setSavingProfile] = useState(false);
       }, 0);
   }, [casesForCurrentUser]);
 
-  // SYSTEM SETTINGS STATE
-  const [agencyMeta, setAgencyMeta] = useState({ agency: "BRENT'S INVESTIGATIVE SERVICES", investigator: "Brent", hourlyRate: 45.00 });
+  // SYSTEM SETTINGS STATE (Agency / lead name come from My Profile: profileAgencyName + profileName)
+  const [globalDefaultHourlyRate, setGlobalDefaultHourlyRate] = useState(45.0);
   const [isAddingCode, setIsAddingCode] = useState(false);
   const [newCode, setNewCode] = useState({ code: '', label: '', defaultHours: 0.0, defaultNarrative: '' });
 
@@ -3329,17 +3329,45 @@ const [savingProfile, setSavingProfile] = useState(false);
                       <Building2 size={16}/> Command Identity
                     </h3>
                     <div className="space-y-6">
+                      <p className="text-[10px] font-medium text-slate-500 leading-relaxed">
+                        Agency name and lead investigator are taken from <span className="font-bold text-slate-700">My Profile</span> (Agency name and Full name). Update them there so the sidebar and settings stay in sync.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowProfile(true)}
+                        className="w-full py-3 rounded-2xl border-2 border-indigo-200 bg-indigo-50 text-indigo-800 font-black uppercase text-[9px] tracking-widest hover:bg-indigo-100 transition-all"
+                      >
+                        Open My Profile
+                      </button>
                       <div className="space-y-2">
                         <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Agency Name</label>
-                        <input value={agencyMeta.agency} onChange={e => setAgencyMeta({...agencyMeta, agency: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600 transition-all"/>
+                        <div className="w-full min-h-[52px] p-4 bg-slate-100 border border-slate-200 rounded-2xl text-[11px] font-bold text-slate-800 flex items-center">
+                          {profileAgencyName.trim() ? (
+                            profileAgencyName
+                          ) : (
+                            <span className="text-slate-400 font-medium">Not set in profile</span>
+                          )}
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Lead Investigator</label>
-                        <input value={agencyMeta.investigator} onChange={e => setAgencyMeta({...agencyMeta, investigator: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-600 transition-all"/>
+                        <div className="w-full min-h-[52px] p-4 bg-slate-100 border border-slate-200 rounded-2xl text-[11px] font-bold text-slate-800 flex items-center">
+                          {profileName.trim() ? (
+                            profileName
+                          ) : (
+                            <span className="text-slate-400 font-medium">Not set in profile</span>
+                          )}
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Default Billing Rate ($)</label>
-                        <input type="number" step="0.1" value={agencyMeta.hourlyRate} onChange={e => setAgencyMeta({...agencyMeta, hourlyRate: parseFloat(e.target.value) || 0})} className="w-full p-4 bg-slate-50 border rounded-2xl text-[11px] font-black outline-none focus:ring-2 focus:ring-indigo-600 transition-all"/>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={globalDefaultHourlyRate}
+                          onChange={(e) => setGlobalDefaultHourlyRate(parseFloat(e.target.value) || 0)}
+                          className="w-full p-4 bg-slate-50 border rounded-2xl text-[11px] font-black outline-none focus:ring-2 focus:ring-indigo-600 transition-all"
+                        />
                       </div>
                       <button className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest shadow-xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-3 active:scale-95">
                         <Save size={16}/> Persist Global Defaults
