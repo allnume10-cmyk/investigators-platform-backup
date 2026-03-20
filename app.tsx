@@ -1618,10 +1618,6 @@ const [savingProfile, setSavingProfile] = useState(false);
   };
 
   const handleExecuteReport = async (reportId: string) => {
-    if (reportId === 'intel' && !isAdmin) {
-      setIsGeneratingReport(false);
-      return;
-    }
     if (reportId === 'command') {
       if (!isAdmin) { setIsGeneratingReport(false); return; }
       if (!selectedCommandInvestigatorId) {
@@ -3025,8 +3021,8 @@ const [savingProfile, setSavingProfile] = useState(false);
                         { id: 'pretrial', label: 'Pre-Trial Readiness', icon: Target, color: 'emerald', desc: 'Strategic preparation status for upcoming trial dates.' },
                         ...(isAdmin ? [
                           { id: 'command', label: 'Investigator Command Dashboard', icon: Gauge, color: 'emerald', desc: 'Focused action dashboard for one investigator (admin only).' },
-                          { id: 'intel', label: 'Global Intel Brief', icon: Sparkles, color: 'indigo', desc: 'AI-generated operational synthesis for management.' }
-                        ] : [])
+                        ] : []),
+                        { id: 'intel', label: 'Global Intel Brief', icon: Sparkles, color: 'indigo', desc: 'AI-generated operational synthesis for management.' }
                       ].map(r => (
                         <div 
                           key={r.id} 
