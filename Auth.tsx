@@ -38,17 +38,45 @@ export function Auth({ onAuthed }: { onAuthed: () => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl p-6">
-        <h1 className="font-brand text-2xl font-bold tracking-tight text-slate-900 mb-0.5">
-          TIER CaseFlow™
-        </h1>
-        <p className="font-brand text-sm font-medium text-slate-600 mb-6">
-          Investigative Workflow Platform
-        </p>
-        <p className="text-sm text-slate-500 mb-6">
-          Sign in to access your dashboard.
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl shadow-slate-200/60">
+        <div className="relative min-h-[9.5rem] bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 px-6 py-8">
+          <div
+            className="pointer-events-none absolute inset-0 z-0 opacity-20"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 15% 0%, rgba(255,255,255,0.12) 0%, transparent 42%)",
+            }}
+          />
+          <div className="relative z-10 flex flex-col items-center gap-5 text-center">
+            <h1
+              className="font-brand text-2xl font-bold leading-tight tracking-tight drop-shadow-sm sm:text-3xl"
+              style={{ color: "#bae6fd" }}
+            >
+              TIER CaseFlow
+              <span
+                className="ml-0.5 align-super text-[0.55em] font-bold"
+                style={{
+                  fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+                  color: "#e0f2fe",
+                }}
+              >
+                ™
+              </span>
+            </h1>
+            <p
+              className="font-brand mx-auto max-w-[20rem] text-center text-sm font-semibold leading-snug sm:text-base"
+              style={{ color: "rgba(199, 210, 254, 0.95)" }}
+            >
+              Investigative Workflow Platform
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <p className="text-sm text-slate-500 mb-6">
+            Sign in to access your dashboard.
+          </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -77,7 +105,7 @@ export function Auth({ onAuthed }: { onAuthed: () => void }) {
 
           <button
             disabled={loading}
-            className="w-full rounded-xl bg-slate-900 text-white py-2 font-semibold disabled:opacity-60"
+            className="w-full rounded-xl bg-indigo-600 py-2.5 font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
           >
             {loading ? "Working..." : mode === "login" ? "Log in" : "Create account"}
           </button>
@@ -96,6 +124,7 @@ export function Auth({ onAuthed }: { onAuthed: () => void }) {
         </div>
 
         {msg && <div className="mt-4 text-sm text-slate-700">{msg}</div>}
+        </div>
       </div>
     </div>
   );
