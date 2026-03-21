@@ -2274,7 +2274,7 @@ const [savingProfile, setSavingProfile] = useState(false);
             <div>
               <h1 className="text-3xl font-black uppercase tracking-tight text-slate-900 leading-none">Intelligence Command</h1>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2 italic flex items-center gap-3">
-                TIER CaseFlow Protocol: Active
+                TIER™ CaseFlow Protocol: Active
                 {lastSync && (
                   <span className="flex items-center gap-2 text-indigo-400 normal-case not-italic ml-4 border-l border-slate-200 pl-4">
                     <ShieldCheck size={14} className="animate-pulse"/>

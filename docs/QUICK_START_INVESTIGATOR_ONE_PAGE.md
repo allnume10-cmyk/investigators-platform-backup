@@ -1,4 +1,4 @@
-# TIER CaseFlow™ — Investigator Quick Start *(one page)*
+# TIER™ CaseFlow — Investigator Quick Start *(one page)*
 
 **1. Sign in** → Open your app URL → enter email/password → **Log in**.
 
@@ -30,4 +30,4 @@
 
 ---
 
-*TIER CaseFlow™ · `docs/QUICK_START_INVESTIGATOR_ONE_PAGE.md`*
+*TIER™ CaseFlow · `docs/QUICK_START_INVESTIGATOR_ONE_PAGE.md`*

@@ -1,4 +1,4 @@
-# TIER CaseFlow™ — Investigator User Guide (Step-by-Step)
+# TIER™ CaseFlow — Investigator User Guide (Step-by-Step)
 
 *Step-by-step instructions for **investigators**. Screenshot placeholders show where to add your own images later (save files under `docs/images/` and update the paths, or paste images into a Word/Google Doc version of this guide).*
 
@@ -16,7 +16,7 @@
 
 ### A1. Open the app and sign in
 
-1. In your browser, go to your **TIER CaseFlow** URL (your team will provide it).
+1. In your browser, go to your **TIER™ CaseFlow** URL (your team will provide it).
 2. Enter your **email** and **password**.
 3. Click **Log in** (or follow your org’s sign-up flow if you were told to create an account).
 

@@ -53,7 +53,7 @@ export function Auth({ onAuthed }: { onAuthed: () => void }) {
               className="font-brand text-2xl font-bold leading-tight tracking-tight drop-shadow-sm sm:text-3xl"
               style={{ color: "#bae6fd" }}
             >
-              TIER CaseFlow
+              TIER
               <span
                 className="ml-0.5 align-super text-[0.55em] font-bold"
                 style={{
@@ -63,6 +63,7 @@ export function Auth({ onAuthed }: { onAuthed: () => void }) {
               >
                 ™
               </span>
+              <span className="ml-1">CaseFlow</span>
             </h1>
             <p
               className="font-brand mx-auto max-w-[20rem] text-center text-sm font-semibold leading-snug sm:text-base"
