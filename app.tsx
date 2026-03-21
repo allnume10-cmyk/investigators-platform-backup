@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
-  Plus, Search, CheckCircle, Clock, X, LayoutDashboard, Inbox, Banknote, 
+  Plus, Search, CheckCircle, Clock, X, LayoutDashboard, Inbox, Banknote, Menu, 
   RefreshCw, Briefcase, Loader2, FolderOpen, Trash2, GitCommit, 
   User, ArrowRight, DollarSign, ListTodo, Sparkles, Gavel, MessageSquare,
   Check, Pencil, ChevronRight, ArrowUpDown, Calendar, FileX, AlertCircle,
@@ -341,15 +341,15 @@ const CaseJacket: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-[1000] p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-[40px] shadow-2xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden border border-slate-300 animate-in zoom-in-95">
-        <header className="px-10 py-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-8">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-3xl font-black uppercase shadow-inner border border-indigo-400">{localCase.defendantLastName?.[0] || '?'}</div>
-            <div>
-              <h2 className="text-2xl font-black uppercase tracking-tight">{localCase.defendantLastName}, {localCase.defendantFirstName}</h2>
-              <div className="flex items-center gap-5 mt-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-r border-slate-700 pr-5">REF: {localCase.caseNumber}</span>
+    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center z-[1000] p-2 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl sm:rounded-[40px] shadow-2xl max-w-6xl w-full h-[92vh] sm:h-[90vh] flex flex-col overflow-hidden border border-slate-300 animate-in zoom-in-95">
+        <header className="px-4 py-4 sm:px-8 sm:py-6 md:px-10 md:py-8 bg-slate-900 text-white flex justify-between items-start gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0 sm:gap-6 md:gap-8">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 bg-indigo-600 rounded-xl sm:rounded-2xl flex items-center justify-center text-xl sm:text-3xl font-black uppercase shadow-inner border border-indigo-400">{localCase.defendantLastName?.[0] || '?'}</div>
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight leading-tight break-words">{localCase.defendantLastName}, {localCase.defendantFirstName}</h2>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-5 mt-2 sm:mt-1">
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest sm:border-r sm:border-slate-700 sm:pr-5">REF: {localCase.caseNumber}</span>
                 <StatusBadge status={localCase.status}/>
                 <VoucherBadge status={localCase.voucherStatus}/>
                 {localCase.isRetainedServices && (
@@ -358,11 +358,11 @@ const CaseJacket: React.FC<{
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-3 hover:bg-white/10 rounded-2xl transition-all active:scale-95"><X size={28}/></button>
+          <button onClick={onClose} className="p-2 sm:p-3 hover:bg-white/10 rounded-xl sm:rounded-2xl transition-all active:scale-95 shrink-0" aria-label="Close"><X size={26}/></button>
         </header>
 
         {(localCase as any).needsIntake && (
-          <div className="px-10 py-3 bg-amber-100 border-b border-amber-200 flex items-center justify-between shrink-0">
+          <div className="px-4 py-3 sm:px-8 md:px-10 bg-amber-100 border-b border-amber-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
             <span className="text-[11px] font-black uppercase tracking-wide text-amber-900">Complete intake information for this case</span>
             <button onClick={() => { updateCase('needsIntake', false); onUpdate({ ...localCase, needsIntake: false }); }} className="px-4 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-all">
               Mark intake complete
@@ -370,27 +370,27 @@ const CaseJacket: React.FC<{
           </div>
         )}
 
-        <div className="flex bg-slate-50 border-b shrink-0 px-10">
+        <div className="flex overflow-x-auto bg-slate-50 border-b shrink-0 px-2 sm:px-6 md:px-10">
           {['details', 'logs', 'communication', 'evidence'].map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab as CaseTab)} className={`px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b-4 transition-all ${activeTab === tab ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>{tab}</button>
+            <button key={tab} onClick={() => setActiveTab(tab as CaseTab)} className={`shrink-0 px-3 py-3 sm:px-8 sm:py-5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-4 transition-all ${activeTab === tab ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>{tab}</button>
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-10 bg-white">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-10 bg-white">
           {activeTab === 'details' && (
-            <div className="animate-in fade-in space-y-12 h-full">
-              <div className="grid grid-cols-12 gap-10">
-                <div className="col-span-6 space-y-10 border-r pr-10">
+            <div className="animate-in fade-in space-y-8 lg:space-y-12 h-full">
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10">
+                <div className="space-y-8 sm:space-y-10 pb-8 border-b border-slate-100 lg:col-span-6 lg:border-b-0 lg:border-r lg:border-slate-100 lg:pr-10 lg:pb-0">
                   <section className="space-y-6">
-                    <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-100 pb-3 flex items-center gap-3"><User size={16} className="text-indigo-600"/> Identity Registry</h3>
-                    <div className="grid grid-cols-2 gap-6 pb-6 border-b border-slate-50">
-                      <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Opened</p><input type="date" value={localCase.dateOpened} onChange={e => updateCase('dateOpened', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
-                      <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Case Number</p><input value={localCase.caseNumber} onChange={e => updateCase('caseNumber', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
-                      <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">First Name</p><input value={localCase.defendantFirstName} onChange={e => updateCase('defendantFirstName', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
-                      <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Last Name</p><input value={localCase.defendantLastName} onChange={e => updateCase('defendantLastName', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none"/></div>
-                      <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead Attorney</p><input value={localCase.attorneyName} onChange={e => updateCase('attorneyName', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none"/></div>
-                      <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Presiding Judge</p><input value={localCase.judgeName} onChange={e => updateCase('judgeName', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
-                      <div className="col-span-2 space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Jurisdiction</p><select value={localCase.jurisdiction_id ?? ''} onChange={e => updateCase('jurisdiction_id', e.target.value || null)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"><option value="">Select area...</option>{jurisdictions.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}</select></div>
+                    <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-100 pb-3 flex items-center gap-3"><User size={16} className="text-indigo-600 shrink-0"/> Identity Registry</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pb-6 border-b border-slate-50">
+                      <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Opened</p><input type="date" value={localCase.dateOpened} onChange={e => updateCase('dateOpened', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
+                      <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Case Number</p><input value={localCase.caseNumber} onChange={e => updateCase('caseNumber', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
+                      <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">First Name</p><input value={localCase.defendantFirstName} onChange={e => updateCase('defendantFirstName', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
+                      <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Last Name</p><input value={localCase.defendantLastName} onChange={e => updateCase('defendantLastName', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none"/></div>
+                      <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead Attorney</p><input value={localCase.attorneyName} onChange={e => updateCase('attorneyName', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none"/></div>
+                      <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Presiding Judge</p><input value={localCase.judgeName} onChange={e => updateCase('judgeName', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
+                      <div className="space-y-1 min-w-0 sm:col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Jurisdiction</p><select value={localCase.jurisdiction_id ?? ''} onChange={e => updateCase('jurisdiction_id', e.target.value || null)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"><option value="">Select area...</option>{jurisdictions.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}</select></div>
                     </div>
                     {isAdmin && (
                       <div className="mt-3">
@@ -420,10 +420,10 @@ const CaseJacket: React.FC<{
                           <p className="text-[10px] font-black uppercase text-slate-300 tracking-widest">No active directives found</p>
                         </div>
                       ) : associatedTasks.map(t => (
-                        <div key={t.id} className={`p-5 rounded-3xl border flex items-center justify-between gap-4 transition-all ${t.completed ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 shadow-sm hover:border-indigo-200'}`}>
+                        <div key={t.id} className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between transition-all ${t.completed ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-200 shadow-sm hover:border-indigo-200'}`}>
                           <div className="flex-1 min-w-0">
                             <p className={`text-[11px] font-bold leading-tight ${t.completed ? 'line-through text-slate-400' : 'text-slate-900'}`}>{t.taskDescription}</p>
-                            <div className="flex items-center gap-3 mt-1.5">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
                               <span className={`text-[8px] font-black uppercase tracking-widest ${!t.completed && t.dueDate < todayStr ? 'text-blue-950' : 'text-slate-400'}`}>
                                 Due: {displayDate(t.dueDate)} {!t.completed && t.dueDate < todayStr && '(OVERDUE)'}
                               </span>
@@ -431,8 +431,9 @@ const CaseJacket: React.FC<{
                             </div>
                           </div>
                           <button 
+                            type="button"
                             onClick={() => onUpdateTask?.({...t, completed: !t.completed})}
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border-2 ${t.completed ? 'bg-emerald-500 border-emerald-500 text-white shadow-inner' : 'border-slate-100 hover:border-indigo-600 text-transparent'}`}
+                            className={`self-end sm:self-auto w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all border-2 ${t.completed ? 'bg-emerald-500 border-emerald-500 text-white shadow-inner' : 'border-slate-100 hover:border-indigo-600 text-transparent'}`}
                           >
                             <Check size={20}/>
                           </button>
@@ -442,36 +443,36 @@ const CaseJacket: React.FC<{
                   </section>
                 </div>
                 
-                <div className="col-span-6 space-y-10">
+                <div className="space-y-8 sm:space-y-10 lg:col-span-6">
                   <section className="space-y-6">
-                    <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-100 pb-3 flex items-center gap-3"><Gavel size={16} className="text-indigo-600"/> Court & Lifecycle</h3>
+                    <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-100 pb-3 flex items-center gap-3"><Gavel size={16} className="text-indigo-600 shrink-0"/> Court & Lifecycle</h3>
                     <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Court Date</p><input type="date" value={localCase.nextCourtDate} onChange={e => updateCase('nextCourtDate', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"/></div>
-                        <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Event Description</p><input value={localCase.nextEventDescription} onChange={e => updateCase('nextEventDescription', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" placeholder="e.g. Trial Readiness"/></div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next Court Date</p><input type="date" value={localCase.nextCourtDate} onChange={e => updateCase('nextCourtDate', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold"/></div>
+                        <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Event Description</p><input value={localCase.nextEventDescription} onChange={e => updateCase('nextEventDescription', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold" placeholder="e.g. Trial Readiness"/></div>
                       </div>
                       <div className="space-y-6">
-                        <div className="grid grid-cols-[1fr_1fr] gap-6 items-start">
-                          <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Case Status</p><select value={localCase.status} onChange={e => updateCase('status', e.target.value as CaseStatus)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(CaseStatus).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 items-start">
+                          <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Case Status</p><select value={localCase.status} onChange={e => updateCase('status', e.target.value as CaseStatus)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(CaseStatus).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                           {(localCase.status === CaseStatus.CLOSED || String(localCase.status || '').toLowerCase() === 'closed') ? (
-                            <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Closed</p><input type="date" value={localCase.dateClosed ?? ''} onChange={e => updateCase('dateClosed', e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
-                          ) : <div />}
+                            <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Date Closed</p><input type="date" value={localCase.dateClosed ?? ''} onChange={e => updateCase('dateClosed', e.target.value)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none"/></div>
+                          ) : <div className="hidden sm:block" />}
                         </div>
-                        <div className="grid grid-cols-[1fr_1fr] gap-6 items-start">
-                          <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Voucher Status</p><select value={localCase.voucherStatus} onChange={e => updateCase('voucherStatus', e.target.value as VoucherStatus)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(VoucherStatus).map(vs => <option key={vs} value={vs}>{vs}</option>)}</select></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 items-start">
+                          <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Voucher Status</p><select value={localCase.voucherStatus} onChange={e => updateCase('voucherStatus', e.target.value as VoucherStatus)} className="w-full min-h-[44px] p-3 bg-slate-50 border rounded-xl text-xs font-black uppercase outline-none">{Object.values(VoucherStatus).map(vs => <option key={vs} value={vs}>{vs}</option>)}</select></div>
                           {(localCase.voucherStatus === VoucherStatus.PAID || String(localCase.voucherStatus || '').toLowerCase() === 'paid') ? (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Date Paid</p><input type="date" value={localCase.datePaid ?? ''} onChange={e => updateCase('datePaid', e.target.value)} className="w-full p-2.5 bg-slate-50 border rounded-lg text-xs font-bold outline-none"/></div>
-                              <div className="space-y-1"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Amount Paid</p><input type="number" step="0.01" min="0" value={localCase.amountPaid ?? ''} onChange={e => updateCase('amountPaid', e.target.value ? Number(e.target.value) : 0)} className="w-full p-2.5 bg-slate-50 border rounded-lg text-xs font-bold outline-none" placeholder="0.00"/></div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-1 min-w-0"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Date Paid</p><input type="date" value={localCase.datePaid ?? ''} onChange={e => updateCase('datePaid', e.target.value)} className="w-full min-h-[44px] p-2.5 bg-slate-50 border rounded-lg text-xs font-bold outline-none"/></div>
+                              <div className="space-y-1 min-w-0"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Amount Paid</p><input type="number" step="0.01" min="0" value={localCase.amountPaid ?? ''} onChange={e => updateCase('amountPaid', e.target.value ? Number(e.target.value) : 0)} className="w-full min-h-[44px] p-2.5 bg-slate-50 border rounded-lg text-xs font-bold outline-none" placeholder="0.00"/></div>
                             </div>
-                          ) : <div />}
+                          ) : <div className="hidden sm:block" />}
                         </div>
                         <div className="flex items-center gap-3">
                           <input type="checkbox" id="retained-services" checked={!!localCase.isRetainedServices} onChange={e => updateCase('isRetainedServices', e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"/>
                           <label htmlFor="retained-services" className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Retained Services</label>
                         </div>
                       </div>
-                      <div className="space-y-1"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Strategic Notes</p><textarea value={localCase.dispositionNotes} onChange={e => updateCase('dispositionNotes', e.target.value)} className="w-full p-4 bg-slate-50 border rounded-xl text-xs font-medium h-48 outline-none resize-none focus:border-indigo-600 transition-all" placeholder="Enter notes..."/></div>
+                      <div className="space-y-1 min-w-0"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Strategic Notes</p><textarea value={localCase.dispositionNotes} onChange={e => updateCase('dispositionNotes', e.target.value)} className="w-full min-h-[12rem] sm:h-48 p-4 bg-slate-50 border rounded-xl text-xs font-medium outline-none resize-y focus:border-indigo-600 transition-all" placeholder="Enter notes..."/></div>
                     </div>
                   </section>
                 </div>
@@ -480,67 +481,96 @@ const CaseJacket: React.FC<{
           )}
 
           {activeTab === 'logs' && (
-            <div className="space-y-8 animate-in fade-in h-full">
-              <div className="bg-slate-900 rounded-[32px] p-8 shadow-2xl relative overflow-hidden shrink-0">
-                <div className="flex justify-between items-center mb-8 relative z-10">
-                  <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">Post Investigative Log {isProcessingVoice && <span className="flex items-center gap-2 text-indigo-300 animate-pulse"><Loader2 size={12} className="animate-spin"/> AI Processing...</span>}</h4>
-                  <div className="flex items-center gap-4">
-                    <button type="button" onClick={copyEmailDraftToClipboard} className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-[10px] uppercase tracking-widest transition-all" title="Copy email draft to clipboard (paste into email to send to attorney)">
-                      <Mail size={18}/>
+            <div className="space-y-6 sm:space-y-8 animate-in fade-in h-full">
+              <div className="bg-slate-900 rounded-2xl sm:rounded-[32px] p-4 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden shrink-0">
+                <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6 lg:mb-8 relative z-10">
+                  <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex flex-wrap items-center gap-2 pr-0">
+                    Post Investigative Log{' '}
+                    {isProcessingVoice && (
+                      <span className="flex items-center gap-2 text-indigo-300 animate-pulse">
+                        <Loader2 size={12} className="animate-spin"/> AI Processing...
+                      </span>
+                    )}
+                  </h4>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-end sm:gap-3 w-full lg:w-auto lg:max-w-none">
+                    <button
+                      type="button"
+                      onClick={copyEmailDraftToClipboard}
+                      className="flex items-center justify-center gap-2 px-4 py-3 sm:py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-[10px] uppercase tracking-widest transition-all w-full sm:w-auto order-2 sm:order-1"
+                      title="Copy email draft to clipboard (paste into email to send to attorney)"
+                    >
+                      <Mail size={18} className="shrink-0"/>
                       Draft email
                     </button>
-                    <p className="text-3xl font-black text-white">{totalHours.toFixed(1)} <span className="text-[10px] text-slate-500 uppercase">Total Billable Hrs</span></p>
+                    <p className="text-xl sm:text-3xl font-black text-white text-center sm:text-right leading-none order-1 sm:order-2 sm:min-w-[10rem]">
+                      <span className="tabular-nums">{totalHours.toFixed(1)}</span>
+                      <span className="block sm:inline text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest font-black mt-1 sm:mt-0 sm:ml-2">Total Billable Hrs</span>
+                    </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-12 gap-4 items-end relative z-10">
-                  <div className="col-span-2 space-y-1"><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Date</p><input type="date" value={newLog.date} onChange={e => setNewLog({...newLog, date: e.target.value})} className="w-full p-3 bg-white rounded-xl text-[11px] font-bold outline-none"/></div>
-                  <div className="col-span-2 space-y-1"><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Type</p><select value={newLog.code} onChange={e => {
-                    const code = e.target.value;
-                    const meta = activityCodes.find(ac => ac.code === code);
-                    setNewLog({...newLog, code, description: meta?.defaultNarrative || '', hours: (meta?.defaultHours || 0.0).toString()});
-                  }} className="w-full p-3 bg-white rounded-xl text-[11px] font-black uppercase" title="Activity code and name">{activityCodes.map(ac => <option key={ac.id} value={ac.code}>{ac.code} – {ac.label}</option>)}</select></div>
-                  <div className="col-span-4 space-y-1">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-4 lg:items-end relative z-10">
+                  <div className="lg:col-span-2 space-y-1">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Date</p>
+                    <input type="date" value={newLog.date} onChange={e => setNewLog({...newLog, date: e.target.value})} className="w-full min-h-[44px] p-3 bg-white rounded-xl text-[11px] font-bold outline-none"/>
+                  </div>
+                  <div className="lg:col-span-2 space-y-1">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Type</p>
+                    <select value={newLog.code} onChange={e => {
+                      const code = e.target.value;
+                      const meta = activityCodes.find(ac => ac.code === code);
+                      setNewLog({...newLog, code, description: meta?.defaultNarrative || '', hours: (meta?.defaultHours || 0.0).toString()});
+                    }} className="w-full min-h-[44px] p-3 bg-white rounded-xl text-[11px] font-black uppercase" title="Activity code and name">{activityCodes.map(ac => <option key={ac.id} value={ac.code}>{ac.code} – {ac.label}</option>)}</select>
+                  </div>
+                  <div className="lg:col-span-4 space-y-1">
                     <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Narrative</p>
                     <textarea
                       value={newLog.description}
                       onChange={e => setNewLog({...newLog, description: e.target.value})}
-                      rows={2}
-                      className="w-full p-3 bg-white rounded-xl text-[11px] font-bold outline-none resize-y min-h-[52px] leading-relaxed"
+                      rows={3}
+                      className="w-full p-3 bg-white rounded-xl text-[11px] font-bold outline-none resize-y min-h-[5.5rem] leading-relaxed"
                       placeholder="Enter narrative..."
                     />
                   </div>
-                  <div className="col-span-1 space-y-1"><p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Hrs</p><input type="number" step="0.1" value={newLog.hours} onChange={e => setNewLog({...newLog, hours: e.target.value})} className="w-full p-3 bg-white rounded-xl text-[11px] font-black outline-none" placeholder="0.1"/></div>
-                  <div className="col-span-3 flex gap-2"><button onClick={isRecording ? stopRecording : startRecording} className={`flex-1 py-3.5 rounded-xl font-black uppercase text-[10px] transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 ${isRecording ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isRecording ? <Square size={14}/> : <Mic size={14}/>} {isRecording ? 'Stop' : 'Voice'}</button><button onClick={handleLogActivity} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-white hover:text-indigo-600 transition-all shadow-lg active:scale-95">Sync</button></div>
+                  <div className="grid grid-cols-2 gap-3 lg:contents">
+                    <div className="lg:col-span-1 space-y-1">
+                      <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Hrs</p>
+                      <input type="number" step="0.1" value={newLog.hours} onChange={e => setNewLog({...newLog, hours: e.target.value})} className="w-full min-h-[44px] p-3 bg-white rounded-xl text-[11px] font-black outline-none" placeholder="0.1"/>
+                    </div>
+                    <div className="col-span-2 flex flex-col gap-2 sm:flex-row lg:col-span-3 lg:gap-2">
+                      <button type="button" onClick={isRecording ? stopRecording : startRecording} className={`flex-1 min-h-[44px] py-3.5 rounded-xl font-black uppercase text-[10px] transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 ${isRecording ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{isRecording ? <Square size={14}/> : <Mic size={14}/>} {isRecording ? 'Stop' : 'Voice'}</button>
+                      <button type="button" onClick={handleLogActivity} className="flex-1 min-h-[44px] py-3.5 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-white hover:text-indigo-600 transition-all shadow-lg active:scale-95">Sync</button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="space-y-4 pb-10">
+              <div className="space-y-4 pb-6 sm:pb-10">
                 {sortedActivities.map(a => (
-                  <div key={a.id} className="p-5 bg-white border rounded-[24px] flex items-start justify-between gap-4 hover:border-indigo-200 transition-all shadow-sm">
-                    <div className="flex gap-4 items-start flex-1 min-w-0">
-                      <div className="flex flex-col gap-2 shrink-0">
+                  <div key={a.id} className="relative p-4 sm:p-5 bg-white border rounded-2xl sm:rounded-[24px] flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between hover:border-indigo-200 transition-all shadow-sm">
+                    <button type="button" onClick={() => updateCase('activities', (localCase.activities || []).filter(x => x.id !== a.id))} className="absolute right-3 top-3 p-2.5 text-rose-400 hover:bg-rose-50 rounded-xl transition-all shrink-0 lg:static lg:self-start lg:p-3" title="Remove entry"><Trash2 size={16}/></button>
+                    <div className="grid grid-cols-1 gap-4 flex-1 min-w-0 pr-11 lg:pr-0 lg:grid-cols-12 lg:gap-4 lg:items-start">
+                      <div className="lg:col-span-2 flex flex-col gap-2">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Date</label>
-                        <input type="date" value={a.date || ''} onChange={e => updateActivity(a.id, { date: e.target.value })} className="w-32 p-2 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500"/>
+                        <input type="date" value={a.date || ''} onChange={e => updateActivity(a.id, { date: e.target.value })} className="w-full min-h-[44px] p-2.5 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500"/>
                       </div>
-                      <div className="flex flex-col gap-2 shrink-0 min-w-[140px]">
+                      <div className="lg:col-span-3 flex flex-col gap-2 min-w-0">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Type</label>
-                        <select value={a.code} onChange={e => updateActivity(a.id, { code: e.target.value })} className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-black uppercase outline-none focus:border-indigo-500" title="Activity code and name">{activityCodes.map(ac => <option key={ac.id} value={ac.code}>{ac.code} – {ac.label}</option>)}</select>
+                        <select value={a.code} onChange={e => updateActivity(a.id, { code: e.target.value })} className="w-full min-h-[44px] p-2.5 bg-slate-50 border rounded-lg text-[11px] font-black uppercase outline-none focus:border-indigo-500" title="Activity code and name">{activityCodes.map(ac => <option key={ac.id} value={ac.code}>{ac.code} – {ac.label}</option>)}</select>
                       </div>
-                      <div className="flex flex-col gap-2 flex-1 min-w-0">
+                      <div className="lg:col-span-5 flex flex-col gap-2 min-w-0">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Narrative</label>
                         <textarea
                           value={a.description || ''}
                           onChange={e => updateActivity(a.id, { description: e.target.value })}
-                          rows={2}
-                          className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500 resize-y min-h-[44px] leading-relaxed"
+                          rows={3}
+                          className="w-full p-2.5 bg-slate-50 border rounded-lg text-[11px] font-bold outline-none focus:border-indigo-500 resize-y min-h-[5rem] leading-relaxed"
                           placeholder="Enter narrative..."
                         />
                       </div>
-                      <div className="flex flex-col gap-2 shrink-0 w-16">
+                      <div className="lg:col-span-2 flex flex-col gap-2 w-full max-w-[8rem] lg:max-w-none">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Hrs</label>
-                        <input type="number" step="0.1" min="0" value={a.hours ?? ''} onChange={e => updateActivity(a.id, { hours: parseFloat(e.target.value) || 0 })} className="w-full p-2 bg-slate-50 border rounded-lg text-[11px] font-black outline-none focus:border-indigo-500"/>
+                        <input type="number" step="0.1" min="0" value={a.hours ?? ''} onChange={e => updateActivity(a.id, { hours: parseFloat(e.target.value) || 0 })} className="w-full min-h-[44px] p-2.5 bg-slate-50 border rounded-lg text-[11px] font-black outline-none focus:border-indigo-500"/>
                       </div>
                     </div>
-                    <button onClick={() => updateCase('activities', (localCase.activities || []).filter(x => x.id !== a.id))} className="p-3 text-rose-400 hover:bg-rose-50 rounded-xl transition-all shrink-0" title="Remove entry"><Trash2 size={16}/></button>
                   </div>
                 ))}
               </div>
@@ -596,9 +626,9 @@ const CaseJacket: React.FC<{
             </div>
           )}
         </div>
-        <footer className="p-8 bg-slate-50 border-t flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest">Cancel</button>
-          <button onClick={handleCommit} disabled={isCommitting} className="px-12 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-indigo-600 transition-all shadow-xl active:scale-95 disabled:opacity-50">
+        <footer className="p-4 sm:p-8 bg-slate-50 border-t flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 shrink-0">
+          <button type="button" onClick={onClose} className="w-full sm:w-auto px-6 py-3 sm:px-8 text-slate-400 font-black uppercase text-[10px] tracking-widest">Cancel</button>
+          <button type="button" onClick={handleCommit} disabled={isCommitting} className="w-full sm:w-auto px-8 py-3 sm:px-12 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all shadow-xl active:scale-95 disabled:opacity-50">
             {isCommitting ? <Loader2 size={18} className="animate-spin"/> : <GitCommit size={18}/>} Commit Changes
           </button>
         </footer>
@@ -633,6 +663,8 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [globalTasks, setGlobalTasks] = useState<GlobalTask[]>([]);
   const [activityCodes, setActivityCodes] = useState<ActivityCode[]>(INITIAL_ACTIVITY_CODES);
   const [activeTab, setActiveTab] = useState('dashboard');
+  /** Off-canvas sidebar on small screens so main content can use full width */
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [registrySearch, setRegistrySearch] = useState('');
@@ -864,6 +896,11 @@ const [savingProfile, setSavingProfile] = useState(false);
   }, [isAdmin, investigators]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  /** Close off-canvas nav whenever the section changes so Case Files (etc.) get full width. */
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [activeTab]);
 
   // Investigators only see jurisdictions they are assigned to (profile_jurisdictions); admins see all.
   const displayJurisdictions = useMemo(() => {
@@ -2227,8 +2264,32 @@ const [savingProfile, setSavingProfile] = useState(false);
   return (
     <div className="flex h-screen w-screen bg-[#F8FAFC] overflow-hidden text-slate-900 font-sans relative">
       <style dangerouslySetInnerHTML={{ __html: '[data-mission-alert-header]{font-size:9px!important;line-height:1!important;font-weight:900!important;}' }} />
-      <aside className="w-64 bg-slate-900 text-white flex flex-col h-full fixed top-0 left-0 z-[100] shadow-2xl">
-        <div className="p-8 border-b border-slate-800 flex flex-col items-center gap-4">
+      {/* Mobile: tap outside to close nav */}
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+      <aside
+        className={`w-64 max-w-[85vw] bg-slate-900 text-white flex flex-col h-full fixed top-0 left-0 z-[100] shadow-2xl transition-transform duration-200 ease-out will-change-transform ${
+          mobileNavOpen ? 'translate-x-0' : 'max-lg:-translate-x-full lg:translate-x-0'
+        }`}
+      >
+        <div className="p-6 border-b border-slate-800 flex flex-col items-center gap-4 sm:p-8">
+          <div className="flex w-full items-center justify-between lg:hidden">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Menu</span>
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <X size={20} />
+            </button>
+          </div>
           <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-2xl border border-indigo-400">
             {sidebarInitials({ initials: profileInitials, full_name: profileName })}
           </div>
@@ -2236,7 +2297,7 @@ const [savingProfile, setSavingProfile] = useState(false);
             {sidebarSubtitle({ agency_name: profileAgencyName })}
           </h2>
         </div>
-        <nav className="flex-1 p-5 space-y-1.5 mt-4">
+        <nav className="flex-1 p-4 space-y-1.5 mt-2 overflow-y-auto custom-scrollbar sm:p-5 sm:mt-4">
           {[ 
             { id: 'dashboard', icon: LayoutDashboard, label: 'Mission Control' }, 
             { id: 'intake', icon: Inbox, label: 'Intake Folder' },
@@ -2248,13 +2309,25 @@ const [savingProfile, setSavingProfile] = useState(false);
             { id: 'vouchers', icon: Banknote, label: 'Voucher Hub' },
             { id: 'core', icon: Settings, label: 'System Settings' } 
           ].map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)} className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${activeTab === t.id ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}><t.icon size={16}/> {t.label}</button>
+            <button
+              key={t.id}
+              onClick={() => {
+                setActiveTab(t.id);
+                setMobileNavOpen(false);
+              }}
+              className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${activeTab === t.id ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+            >
+              <t.icon size={16}/> {t.label}
+            </button>
           ))}
         </nav>
         <div className="p-5 border-t border-slate-800 space-y-1.5">
           <button
             className="w-full flex items-center gap-4 px-5 py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-all"
-            onClick={() => setShowProfile(true)}
+            onClick={() => {
+              setShowProfile(true);
+              setMobileNavOpen(false);
+            }}
           >
             My Profile
           </button>
@@ -2268,29 +2341,45 @@ const [savingProfile, setSavingProfile] = useState(false);
         </div>
       </aside>
 
-      <main className="flex-1 ml-64 overflow-y-auto bg-slate-50/50 min-h-screen flex flex-col">
-        <div className="sticky top-0 z-[50] bg-[#F8FAFC]/95 backdrop-blur-xl border-b p-8 pb-8 shadow-sm">
-          <header className="flex justify-between items-center mb-10">
-            <div>
-              <h1 className="text-3xl font-black uppercase tracking-tight text-slate-900 leading-none">Intelligence Command</h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2 italic flex items-center gap-3">
-                TIER™ CaseFlow Protocol: Active
-                {lastSync && (
-                  <span className="flex items-center gap-2 text-indigo-400 normal-case not-italic ml-4 border-l border-slate-200 pl-4">
-                    <ShieldCheck size={14} className="animate-pulse"/>
-                    LAST SIGNAL SYNC: {lastSync.toLocaleTimeString()}
-                  </span>
-                )}
-              </p>
+      <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50/50 min-h-screen flex flex-col lg:ml-64">
+        <div className="sticky top-0 z-[50] bg-[#F8FAFC]/95 backdrop-blur-xl border-b p-4 pb-6 shadow-sm sm:p-6 sm:pb-8 lg:p-8">
+          <header className="mb-6 flex flex-col gap-4 sm:mb-8 md:flex-row md:items-start md:justify-between lg:mb-10">
+            <div className="flex min-w-0 items-start gap-3">
+              <button
+                type="button"
+                aria-label="Open menu"
+                className="mt-1 shrink-0 rounded-xl border border-slate-200 bg-white p-2.5 text-slate-800 shadow-sm hover:bg-slate-50 lg:hidden"
+                onClick={() => setMobileNavOpen(true)}
+              >
+                <Menu size={22} />
+              </button>
+              <div className="min-w-0">
+                <h1 className="text-xl font-black uppercase tracking-tight text-slate-900 leading-tight sm:text-2xl lg:text-3xl lg:leading-none">
+                  Intelligence Command
+                </h1>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 italic flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                  <span>TIER™ CaseFlow Protocol: Active</span>
+                  {lastSync && (
+                    <span className="flex items-center gap-2 text-indigo-400 normal-case not-italic sm:ml-4 sm:border-l sm:border-slate-200 sm:pl-4">
+                      <ShieldCheck size={14} className="animate-pulse shrink-0"/>
+                      LAST SIGNAL SYNC: {lastSync.toLocaleTimeString()}
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button onClick={fetchAll} className="flex items-center gap-2 px-6 py-3 bg-white border text-slate-900 rounded-xl font-black text-[10px] uppercase hover:bg-slate-900 hover:text-white transition-all shadow-sm">
+            <div className="flex w-full items-center gap-3 md:w-auto md:shrink-0">
+              <button onClick={fetchAll} className="flex flex-1 items-center justify-center gap-2 px-4 py-3 bg-white border text-slate-900 rounded-xl font-black text-[10px] uppercase hover:bg-slate-900 hover:text-white transition-all shadow-sm sm:flex-initial sm:px-6">
                 <RefreshCw size={14} className={isProcessing ? 'animate-spin' : ''}/> Sync Cloud
               </button>
             </div>
           </header>
           
-          <div className="grid grid-cols-4 gap-6">
+          <div
+            className={`grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4 xl:gap-6 ${
+              activeTab === 'dashboard' ? '' : 'hidden lg:grid'
+            }`}
+          >
             <StatCard label="Active Matters" value={dashboardAnalytics.activeCount} icon={Briefcase} color="indigo" subValue="Open Cases" onClick={() => { setActiveTab('cases'); setRegistrySearch(''); setLifecycleFilter('Active'); }} />
             <StatCard label="Critical Phase" value={dashboardAnalytics.urgentTrials.length} icon={Flame} color="orange" subValue="Next 30 Days" onClick={() => { setActiveTab('cases'); setRegistrySearch(''); setLifecycleFilter('Active'); }} />
             <StatCard label="Cold Starts" value={dashboardAnalytics.coldStarts.length} icon={ShieldAlert} color="rose" subValue="14+ Days NEW" onClick={() => { setActiveTab('cases'); setRegistrySearch(''); setLifecycleFilter('Active'); }} />
@@ -2298,16 +2387,16 @@ const [savingProfile, setSavingProfile] = useState(false);
           </div>
         </div>
 
-        <div className="p-10 flex-1 pt-6">
+        <div className="flex-1 p-4 pt-4 sm:p-6 sm:pt-5 lg:p-10 lg:pt-6">
           {activeTab === 'dashboard' && (
             <div className="animate-in fade-in space-y-10 max-w-[1700px] mx-auto pb-20">
               
               <div className="space-y-6">
                 {/* Financial Summary - Thinner Boxes */}
-                <div className="grid grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8">
                   <div 
                     onClick={() => { setActiveTab('vouchers'); setVoucherView('Paid'); }}
-                    className="p-4 px-6 rounded-[28px] border border-emerald-200 bg-white flex items-center gap-6 shadow-sm cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all active:scale-95 group"
+                    className="p-4 px-4 rounded-[28px] border border-emerald-200 bg-white flex items-center gap-4 shadow-sm cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all active:scale-95 group sm:gap-6 sm:px-6"
                   >
                     <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg group-hover:scale-105 transition-transform"><Wallet size={20}/></div>
                     <div>
@@ -2320,7 +2409,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                   </div>
                   <div 
                     onClick={() => { setActiveTab('vouchers'); setVoucherView('Submitted'); }}
-                    className="p-4 px-6 rounded-[28px] border border-indigo-100 bg-white flex items-center gap-6 shadow-sm cursor-pointer hover:border-indigo-500 hover:shadow-md transition-all active:scale-95 group"
+                    className="p-4 px-4 rounded-[28px] border border-indigo-100 bg-white flex items-center gap-4 shadow-sm cursor-pointer hover:border-indigo-500 hover:shadow-md transition-all active:scale-95 group sm:gap-6 sm:px-6"
                   >
                     <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg group-hover:scale-105 transition-transform"><Hourglass size={20}/></div>
                     <div>
@@ -2331,7 +2420,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                 </div>
 
                 {/* Voucher Lifecycle Buttons */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6">
                   {[
                     { label: 'Missing', count: dashboardAnalytics.counts.Missing, color: 'rose', icon: FileWarning, view: 'Missing' as VoucherSegment },
                     { label: 'Pre-Audit', count: dashboardAnalytics.counts['Pre-Audit'], color: 'amber', icon: ClipboardCheck, view: 'Pre-Audit' as VoucherSegment },
@@ -2364,7 +2453,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 h-[calc(100vh-520px)]">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8 lg:grid-cols-3 lg:gap-10 lg:h-[calc(100vh-520px)] lg:min-h-0">
                 
                 {/* COLUMN 1: RISK INDICATORS */}
                 <div className="space-y-6 flex flex-col min-h-0">
@@ -3201,21 +3290,22 @@ const [savingProfile, setSavingProfile] = useState(false);
           )}
 
           {activeTab === 'cases' && (
-            <div className="animate-in fade-in max-w-[1600px] mx-auto flex flex-col h-[calc(100vh-220px)] min-h-0 pb-6">
-               <div className="shrink-0 bg-white p-6 rounded-[40px] border border-slate-100 shadow-xl flex flex-col gap-6 mb-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg">
+            <div className="animate-in fade-in max-w-[1600px] mx-auto flex flex-col min-h-0 flex-1 pb-6 lg:h-[calc(100vh-220px)]">
+               <div className="shrink-0 bg-white p-4 rounded-2xl border border-slate-100 shadow-xl flex flex-col gap-4 mb-4 sm:p-6 sm:rounded-[40px] sm:gap-6 sm:mb-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="p-2.5 bg-indigo-600 text-white rounded-2xl shadow-lg sm:p-3">
                         <FolderOpen size={20}/>
                       </div>
-                      <div className="hidden sm:block">
-                        <h1 className="text-xl font-black uppercase tracking-tight text-slate-900 leading-none">Master Registry</h1>
+                      <div>
+                        <h1 className="text-lg font-black uppercase tracking-tight text-slate-900 leading-none sm:text-xl">Master Registry</h1>
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Strategic Index</p>
+                        <p className="mt-2 text-[10px] text-slate-500 lg:hidden">Tap a case to open. Rotate for wider layout.</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="flex bg-slate-100 p-1 rounded-[16px] gap-0.5 shadow-inner">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:flex-nowrap">
+                      <div className="flex w-full overflow-x-auto bg-slate-100 p-1 rounded-[16px] gap-0.5 shadow-inner sm:w-auto [-webkit-overflow-scrolling:touch]">
                         {[
                           { id: 'Active', icon: Zap },
                           { id: 'Unscheduled', icon: Timer },
@@ -3224,7 +3314,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                           <button 
                             key={f.id} 
                             onClick={() => setLifecycleFilter(f.id as any)}
-                            className={`px-4 py-1.5 rounded-[12px] text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${lifecycleFilter === f.id ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
+                            className={`shrink-0 px-4 py-2 rounded-[12px] text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${lifecycleFilter === f.id ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
                           >
                             <f.icon size={10}/>
                             {f.id}
@@ -3235,23 +3325,25 @@ const [savingProfile, setSavingProfile] = useState(false);
                         ))}
                       </div>
 
-                      <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm group hover:border-indigo-200 transition-all">
-                        <SortAsc size={12} className="text-slate-400"/>
-                        <select 
-                          value={caseSort} 
-                          onChange={(e) => setCaseSort(e.target.value as CaseSort)}
-                          className="bg-transparent border-none text-[8px] font-black uppercase tracking-widest text-slate-600 outline-none cursor-pointer pr-3"
-                        >
-                          <option value="Defendant">By Defendant</option>
-                          <option value="Court Date">By Court Date</option>
-                          <option value="Attorney">By Attorney</option>
-                          <option value="Date Opened">By Date Opened (Oldest)</option>
-                        </select>
-                      </div>
+                      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                        <div className="flex min-w-0 flex-1 items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 shadow-sm group hover:border-indigo-200 transition-all sm:flex-initial sm:py-1.5">
+                          <SortAsc size={12} className="shrink-0 text-slate-400"/>
+                          <select 
+                            value={caseSort} 
+                            onChange={(e) => setCaseSort(e.target.value as CaseSort)}
+                            className="min-w-0 flex-1 bg-transparent border-none text-[8px] font-black uppercase tracking-widest text-slate-600 outline-none cursor-pointer sm:pr-3"
+                          >
+                            <option value="Defendant">By Defendant</option>
+                            <option value="Court Date">By Court Date</option>
+                            <option value="Attorney">By Attorney</option>
+                            <option value="Date Opened">By Date Opened (Oldest)</option>
+                          </select>
+                        </div>
 
-                      <button onClick={handleNewCase} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-black uppercase text-[9px] tracking-widest flex items-center gap-2 hover:bg-indigo-600 transition-all shadow-lg active:scale-95 whitespace-nowrap">
-                        <Plus size={14}/> New Matter
-                      </button>
+                        <button onClick={handleNewCase} className="w-full px-4 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-600 transition-all shadow-lg active:scale-95 sm:w-auto sm:px-6 sm:py-2">
+                          <Plus size={14}/> New Matter
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -3266,8 +3358,68 @@ const [savingProfile, setSavingProfile] = useState(false);
                   </div>
                </div>
 
-               <div className="flex-1 min-h-0 bg-white rounded-[64px] border shadow-2xl overflow-hidden flex flex-col transition-all">
-                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+               <div className="flex-1 min-h-0 bg-white rounded-2xl border shadow-2xl overflow-hidden flex flex-col transition-all lg:rounded-[64px]">
+                {/* Mobile / tablet: card list — wide table is unreadable in portrait */}
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 pb-6 lg:hidden">
+                  <div className="flex flex-col gap-3">
+                    {masterRegistryCases.length === 0 && (
+                      <p className="text-center text-sm text-slate-500 py-8">No cases match this view.</p>
+                    )}
+                    {masterRegistryCases.map(c => {
+                      const isCriticalEvent = ["trial readiness", "jury trial", "non-jury trial", "motion hearing"].some(term => (c.nextEventDescription || '').toLowerCase().includes(term));
+                      const isUrgent = c.nextCourtDate && isCriticalEvent && calculateDaysDiff(c.nextCourtDate) >= -30 && calculateDaysDiff(c.nextCourtDate) <= 0;
+                      const lastActivityDate = (c.activities || []).length > 0 ? [...c.activities].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date : c.dateOpened;
+                      const isStagnant = calculateDaysDiff(lastActivityDate) >= 45 && c.status !== CaseStatus.CLOSED;
+                      return (
+                        <button
+                          type="button"
+                          key={c.id}
+                          onClick={() => setSelectedCaseId(c.id)}
+                          className={`w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all active:scale-[0.99] ${
+                            (c as any).needsIntake ? 'border-amber-300 bg-amber-50/40' : ''
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-black uppercase text-slate-900 text-sm leading-snug">
+                                {c.defendantLastName}, {c.defendantFirstName}
+                              </p>
+                              <p className="text-xs font-bold text-slate-500 mt-1">{c.caseNumber || 'TBD-REF-00'}</p>
+                            </div>
+                            <div className="shrink-0 flex flex-col items-end gap-1">
+                              <VoucherBadge status={c.voucherStatus}/>
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-2 line-clamp-2">
+                            <span className="font-bold text-slate-500">Atty: </span>
+                            {c.attorneyName || 'Unassigned'}
+                          </p>
+                          <p className={`text-xs mt-1 font-bold uppercase ${isUrgent ? 'text-rose-600' : 'text-indigo-600'}`}>
+                            {c.nextEventDescription || 'Phase Unscheduled'} · {displayDate(c.nextCourtDate)}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            {(c.activities || []).reduce((s, a) => s + (a.hours || 0), 0).toFixed(1)} billable hrs · Opened {displayDate(c.dateOpened)}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {(c as any).needsIntake && (
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded text-[8px] font-black uppercase">Complete intake</span>
+                            )}
+                            {isUrgent && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 bg-rose-600 text-white text-[8px] font-black uppercase rounded-full">
+                                <Flame size={10}/> Urgent
+                              </span>
+                            )}
+                            {isStagnant && !isUrgent && (
+                              <span className="px-2 py-0.5 bg-indigo-950 text-white text-[8px] font-black uppercase rounded-full">Stagnant</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="hidden lg:flex flex-1 min-h-0 flex-col overflow-y-auto custom-scrollbar">
                   <table className="w-full text-left table-fixed border-separate border-spacing-0">
                     <thead className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest sticky top-0 z-20 shadow-xl">
                       <tr>
