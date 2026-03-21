@@ -226,6 +226,7 @@ At the top of the case jacket you should see tabs such as **details**, **logs**,
    - **Download my data (JSON)** — one file with your **assigned** cases, activity logs, communications, evidence rows, and tasks (best for a full backup).
    - **Export my case registry (CSV)** — spreadsheet-style summary of **your** cases (aligned with what you see in **Case Files** / list filters when you export).
    - **Export my tasks (CSV)** — **your** task list in spreadsheet form.
+   - If **Excel** puts everything on one row or shifts columns, use **Registry .tsv** / **Tasks .tsv** (tab-separated) instead — same data, usually lines up correctly.
 3. **Command Identity** — **Agency name** and **Lead investigator** show what you entered in **My Profile**. To change them, click **Open My Profile**, edit, **Save**.
 4. **Default billing rate** — only change if your office told you to; ask if unsure.
 5. If your account is **inactive**, you may see a short notice at the top of **Export & backup** — the same download buttons still apply.

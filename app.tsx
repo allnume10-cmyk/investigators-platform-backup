@@ -2085,25 +2085,37 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [isAddingCode, setIsAddingCode] = useState(false);
   const [newCode, setNewCode] = useState({ code: '', label: '', defaultHours: 0.0, defaultNarrative: '' });
 
-  /** RFC 4180-style escaping so commas/quotes/newlines in cells don’t break rows (Excel, Sheets). */
-  const escapeCsvCell = (val: unknown): string => {
-    if (val === null || val === undefined) return '';
-    const s = String(val);
-    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
+  /** Quote every CSV cell so commas/newlines in text never shift columns (Excel, Google Sheets). */
+  const quoteCsvCell = (val: unknown): string => {
+    const s = val === null || val === undefined ? '' : String(val);
+    return `"${s.replace(/"/g, '""')}"`;
   };
 
+  /** BOM + CRLF + every field in double quotes = correct rows/columns in Sheets and most Excel setups. */
   const buildCsvDownload = (headers: string[], dataRows: unknown[][]) => {
     const lines = [
-      headers.map(escapeCsvCell).join(','),
-      ...dataRows.map(row => row.map(escapeCsvCell).join(',')),
+      headers.map(quoteCsvCell).join(','),
+      ...dataRows.map(row => row.map(quoteCsvCell).join(',')),
     ];
-    // \r\n = one row per line in Excel/Windows; UTF-8 BOM helps Excel detect encoding
-    return `\uFEFF${lines.join('\r\n')}`;
+    return `\uFEFF${lines.join('\r\n')}\r\n`;
   };
 
-  const downloadCsvFile = (csvText: string, filename: string) => {
-    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+  /** Tab-separated: best when Excel still mis-reads CSV; tabs rarely appear in case/task text. */
+  const escapeTsvCell = (val: unknown): string => {
+    const s = val === null || val === undefined ? '' : String(val);
+    return s.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\t/g, ' ');
+  };
+
+  const buildTsvDownload = (headers: string[], dataRows: unknown[][]) => {
+    const lines = [
+      headers.map(escapeTsvCell).join('\t'),
+      ...dataRows.map(row => row.map(escapeTsvCell).join('\t')),
+    ];
+    return `\uFEFF${lines.join('\r\n')}\r\n`;
+  };
+
+  const downloadTextFile = (text: string, filename: string, mime: string) => {
+    const blob = new Blob([text], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -2114,8 +2126,8 @@ const [savingProfile, setSavingProfile] = useState(false);
     URL.revokeObjectURL(url);
   };
 
-  const exportRegistryCSV = () => {
-    const headers = ["Defendant", "Case Number", "Attorney", "Opened", "Status", "Total Hours"];
+  const registryExportRows = (): [string[], unknown[][]] => {
+    const headers = ['Defendant', 'Case Number', 'Attorney', 'Opened', 'Status', 'Total Hours'];
     const rows = masterRegistryCases.map(c => [
       `${(c.defendantLastName || '').trim()}, ${(c.defendantFirstName || '').trim()}`.trim(),
       c.caseNumber,
@@ -2124,12 +2136,11 @@ const [savingProfile, setSavingProfile] = useState(false);
       c.status,
       (c.activities || []).reduce((s, a) => s + a.hours, 0).toFixed(1),
     ]);
-    const csv = buildCsvDownload(headers, rows);
-    downloadCsvFile(csv, `${isAdmin ? 'Master_Registry' : 'My_Case_Registry'}_${todayStr}.csv`);
+    return [headers, rows];
   };
 
-  const exportTasksCSV = () => {
-    const headers = ["Defendant", "Directive", "Due Date", "Priority", "Completed"];
+  const tasksExportRows = (): [string[], unknown[][]] => {
+    const headers = ['Defendant', 'Directive', 'Due Date', 'Priority', 'Completed'];
     const rows = tasksForCurrentUser.map(t => [
       t.defendantName,
       t.taskDescription,
@@ -2137,8 +2148,43 @@ const [savingProfile, setSavingProfile] = useState(false);
       t.priority,
       t.completed ? 'Yes' : 'No',
     ]);
-    const csv = buildCsvDownload(headers, rows);
-    downloadCsvFile(csv, `${isAdmin ? 'Task_Feed' : 'My_Tasks'}_${todayStr}.csv`);
+    return [headers, rows];
+  };
+
+  const exportRegistryCSV = () => {
+    const [headers, rows] = registryExportRows();
+    downloadTextFile(
+      buildCsvDownload(headers, rows),
+      `${isAdmin ? 'Master_Registry' : 'My_Case_Registry'}_${todayStr}.csv`,
+      'text/csv;charset=utf-8;',
+    );
+  };
+
+  const exportRegistryTSV = () => {
+    const [headers, rows] = registryExportRows();
+    downloadTextFile(
+      buildTsvDownload(headers, rows),
+      `${isAdmin ? 'Master_Registry' : 'My_Case_Registry'}_${todayStr}.tsv`,
+      'text/tab-separated-values;charset=utf-8;',
+    );
+  };
+
+  const exportTasksCSV = () => {
+    const [headers, rows] = tasksExportRows();
+    downloadTextFile(
+      buildCsvDownload(headers, rows),
+      `${isAdmin ? 'Task_Feed' : 'My_Tasks'}_${todayStr}.csv`,
+      'text/csv;charset=utf-8;',
+    );
+  };
+
+  const exportTasksTSV = () => {
+    const [headers, rows] = tasksExportRows();
+    downloadTextFile(
+      buildTsvDownload(headers, rows),
+      `${isAdmin ? 'Task_Feed' : 'My_Tasks'}_${todayStr}.tsv`,
+      'text/tab-separated-values;charset=utf-8;',
+    );
   };
 
   const exportMyData = () => {
@@ -3335,8 +3381,8 @@ const [savingProfile, setSavingProfile] = useState(false);
                     )}
                     <p className="text-[10px] font-medium text-slate-400 leading-relaxed">
                       {isAdmin
-                        ? 'Download a JSON snapshot or CSV extracts for all cases and tasks in this workspace (matches your current Case Files / registry filters where applicable).'
-                        : 'Save a personal backup: JSON includes your assigned cases, activity logs, communications, evidence rows, and tasks. CSV files match what you see in Case Files and Investigative Tasks.'}
+                        ? 'Files save to your browser’s Downloads folder. JSON is the full structured backup; CSV/TSV are spreadsheet-friendly (registry uses your current Case Files filters).'
+                        : 'Files save to your browser’s Downloads folder. JSON = full backup of your assigned cases and related data. Use CSV or TSV for Excel/Sheets.'}
                     </p>
                     <div className="space-y-4">
                       <button onClick={exportMyData} className="w-full p-6 bg-white/5 border border-white/10 rounded-[32px] hover:bg-white/10 transition-all text-left group">
@@ -3345,7 +3391,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                             <div className="p-3 bg-emerald-600 rounded-2xl"><FileType size={20}/></div>
                             <div>
                               <p className="text-[11px] font-black uppercase tracking-widest">Download my data (JSON)</p>
-                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">Full snapshot for your access scope (.json)</p>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">Pretty-printed file: my_data_export_{todayStr}.json — open in any text editor</p>
                             </div>
                           </div>
                           <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
@@ -3357,7 +3403,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                             <div className="p-3 bg-indigo-600 rounded-2xl"><FileType size={20}/></div>
                             <div>
                               <p className="text-[11px] font-black uppercase tracking-widest">{isAdmin ? 'Export master registry' : 'Export my case registry'}</p>
-                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{isAdmin ? 'Full case record dataset (.csv)' : 'Your assigned cases (.csv)'}</p>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{isAdmin ? 'Comma-separated (.csv), one row per case' : 'Comma-separated (.csv), one row per assigned case'}</p>
                             </div>
                           </div>
                           <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
@@ -3369,11 +3415,30 @@ const [savingProfile, setSavingProfile] = useState(false);
                             <div className="p-3 bg-indigo-600 rounded-2xl"><ListTodo size={20}/></div>
                             <div>
                               <p className="text-[11px] font-black uppercase tracking-widest">{isAdmin ? 'Export tactical feed' : 'Export my tasks'}</p>
-                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{isAdmin ? 'Active directives dataset (.csv)' : 'Your task list (.csv)'}</p>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{isAdmin ? 'Comma-separated (.csv), one row per task' : 'Comma-separated (.csv), one row per task'}</p>
                             </div>
                           </div>
                           <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
                         </div>
+                      </button>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
+                      Columns misaligned in Excel? Use tab-separated (.tsv) — same data, usually lines up better.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={exportRegistryTSV}
+                        className="px-4 py-2 rounded-xl bg-white/10 border border-white/15 text-[9px] font-black uppercase tracking-widest hover:bg-white/15 transition-all"
+                      >
+                        Registry .tsv
+                      </button>
+                      <button
+                        type="button"
+                        onClick={exportTasksTSV}
+                        className="px-4 py-2 rounded-xl bg-white/10 border border-white/15 text-[9px] font-black uppercase tracking-widest hover:bg-white/15 transition-all"
+                      >
+                        Tasks .tsv
                       </button>
                     </div>
                     <div className="pt-4 border-t border-white/5 flex items-center gap-4 px-2">
