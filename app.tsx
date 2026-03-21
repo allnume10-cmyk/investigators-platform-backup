@@ -18,7 +18,7 @@ import {
   CheckCircle2, FileUp, DatabaseZap, Cpu, OctagonAlert, Download, FileType,
   MailOpen, CalendarRange, ArrowUpRight, Gauge, Timer, FilterX, SortDesc,
   ChevronDown, FileWarning, ClipboardCheck, SendHorizontal, BadgeCheck,
-  Building2, HardDrive, ShieldCheck as ShieldCheckIcon, SaveAll, Cloud,
+  Building2, ShieldCheck as ShieldCheckIcon, SaveAll, Cloud,
   TimerReset, BarChart4
 } from 'lucide-react';
 import { 
@@ -2085,23 +2085,47 @@ const [savingProfile, setSavingProfile] = useState(false);
   const [isAddingCode, setIsAddingCode] = useState(false);
   const [newCode, setNewCode] = useState({ code: '', label: '', defaultHours: 0.0, defaultNarrative: '' });
 
+  /** RFC 4180-style escaping so commas/quotes/newlines in cells don’t break rows (Excel, Sheets). */
+  const escapeCsvCell = (val: unknown): string => {
+    if (val === null || val === undefined) return '';
+    const s = String(val);
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const buildCsvDownload = (headers: string[], dataRows: unknown[][]) => {
+    const lines = [
+      headers.map(escapeCsvCell).join(','),
+      ...dataRows.map(row => row.map(escapeCsvCell).join(',')),
+    ];
+    // \r\n = one row per line in Excel/Windows; UTF-8 BOM helps Excel detect encoding
+    return `\uFEFF${lines.join('\r\n')}`;
+  };
+
+  const downloadCsvFile = (csvText: string, filename: string) => {
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const exportRegistryCSV = () => {
     const headers = ["Defendant", "Case Number", "Attorney", "Opened", "Status", "Total Hours"];
     const rows = masterRegistryCases.map(c => [
-      `${c.defendantLastName}, ${c.defendantFirstName}`,
+      `${(c.defendantLastName || '').trim()}, ${(c.defendantFirstName || '').trim()}`.trim(),
       c.caseNumber,
       c.attorneyName,
       c.dateOpened,
       c.status,
-      (c.activities || []).reduce((s,a) => s + a.hours, 0).toFixed(1)
+      (c.activities || []).reduce((s, a) => s + a.hours, 0).toFixed(1),
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\\n" + rows.map(r => r.join(",")).join("\\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Master_Registry_${todayStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
+    const csv = buildCsvDownload(headers, rows);
+    downloadCsvFile(csv, `${isAdmin ? 'Master_Registry' : 'My_Case_Registry'}_${todayStr}.csv`);
   };
 
   const exportTasksCSV = () => {
@@ -2111,15 +2135,10 @@ const [savingProfile, setSavingProfile] = useState(false);
       t.taskDescription,
       t.dueDate,
       t.priority,
-      t.completed ? "Yes" : "No"
+      t.completed ? 'Yes' : 'No',
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\\n" + rows.map(r => r.join(",")).join("\\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Task_Feed_${todayStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
+    const csv = buildCsvDownload(headers, rows);
+    downloadCsvFile(csv, `${isAdmin ? 'Task_Feed' : 'My_Tasks'}_${todayStr}.csv`);
   };
 
   const exportMyData = () => {
@@ -3304,22 +3323,65 @@ const [savingProfile, setSavingProfile] = useState(false);
               <div className="grid grid-cols-12 gap-10">
                 {/* Command Identity Section */}
                 <div className="col-span-4 space-y-8">
-                  {isInvestigatorInactive && (
-                    <section className="bg-amber-50 border-2 border-amber-200 rounded-[48px] p-10 shadow-sm space-y-6">
-                      <h3 className="text-[11px] font-black uppercase text-amber-700 tracking-[0.2em] flex items-center gap-3 border-b border-amber-200 pb-4">
-                        <DatabaseBackup size={16}/> Export my data
-                      </h3>
-                      <p className="text-[11px] font-medium text-slate-700 leading-relaxed">
-                        Your account is inactive. You can download a copy of your case data, activity logs, tasks, and communications below.
-                      </p>
-                      <button
-                        onClick={exportMyData}
-                        className="w-full py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-amber-700 transition-all flex items-center justify-center gap-3 active:scale-95"
-                      >
-                        <Download size={18}/> Download my data (JSON)
+                  {/* Export & backup — available to all roles; data is scoped to assigned cases / tasks for investigators */}
+                  <section className="bg-slate-900 text-white border rounded-[48px] p-10 shadow-2xl space-y-6">
+                    <h3 className="text-[11px] font-black uppercase text-indigo-400 tracking-[0.2em] flex items-center gap-3 border-b border-white/5 pb-4">
+                      <DatabaseBackup size={16}/> Export & backup
+                    </h3>
+                    {isInvestigatorInactive && (
+                      <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-400/40 text-[10px] font-bold text-amber-100 uppercase tracking-widest leading-relaxed">
+                        Account inactive — download copies of your data using the options below.
+                      </div>
+                    )}
+                    <p className="text-[10px] font-medium text-slate-400 leading-relaxed">
+                      {isAdmin
+                        ? 'Download a JSON snapshot or CSV extracts for all cases and tasks in this workspace (matches your current Case Files / registry filters where applicable).'
+                        : 'Save a personal backup: JSON includes your assigned cases, activity logs, communications, evidence rows, and tasks. CSV files match what you see in Case Files and Investigative Tasks.'}
+                    </p>
+                    <div className="space-y-4">
+                      <button onClick={exportMyData} className="w-full p-6 bg-white/5 border border-white/10 rounded-[32px] hover:bg-white/10 transition-all text-left group">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="p-3 bg-emerald-600 rounded-2xl"><FileType size={20}/></div>
+                            <div>
+                              <p className="text-[11px] font-black uppercase tracking-widest">Download my data (JSON)</p>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">Full snapshot for your access scope (.json)</p>
+                            </div>
+                          </div>
+                          <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
+                        </div>
                       </button>
-                    </section>
-                  )}
+                      <button onClick={exportRegistryCSV} className="w-full p-6 bg-white/5 border border-white/10 rounded-[32px] hover:bg-white/10 transition-all text-left group">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="p-3 bg-indigo-600 rounded-2xl"><FileType size={20}/></div>
+                            <div>
+                              <p className="text-[11px] font-black uppercase tracking-widest">{isAdmin ? 'Export master registry' : 'Export my case registry'}</p>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{isAdmin ? 'Full case record dataset (.csv)' : 'Your assigned cases (.csv)'}</p>
+                            </div>
+                          </div>
+                          <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
+                        </div>
+                      </button>
+                      <button onClick={exportTasksCSV} className="w-full p-6 bg-white/5 border border-white/10 rounded-[32px] hover:bg-white/10 transition-all text-left group">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="p-3 bg-indigo-600 rounded-2xl"><ListTodo size={20}/></div>
+                            <div>
+                              <p className="text-[11px] font-black uppercase tracking-widest">{isAdmin ? 'Export tactical feed' : 'Export my tasks'}</p>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{isAdmin ? 'Active directives dataset (.csv)' : 'Your task list (.csv)'}</p>
+                            </div>
+                          </div>
+                          <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
+                        </div>
+                      </button>
+                    </div>
+                    <div className="pt-4 border-t border-white/5 flex items-center gap-4 px-2">
+                       <div className="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_12px_rgba(16,185,129,0.6)] animate-pulse"/>
+                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Supabase Cloud Sync: Secured</p>
+                    </div>
+                  </section>
+
                   <section className="bg-white border rounded-[48px] p-10 shadow-sm space-y-8">
                     <h3 className="text-[11px] font-black uppercase text-indigo-600 tracking-[0.2em] flex items-center gap-3 border-b border-slate-50 pb-4">
                       <Building2 size={16}/> Command Identity
@@ -3427,43 +3489,6 @@ const [savingProfile, setSavingProfile] = useState(false);
                       </div>
                     </section>
                   )}
-
-                  {/* System Utilities Section */}
-                  <section className="bg-slate-900 text-white border rounded-[48px] p-10 shadow-2xl space-y-8">
-                    <h3 className="text-[11px] font-black uppercase text-indigo-400 tracking-[0.2em] flex items-center gap-3 border-b border-white/5 pb-4">
-                      <HardDrive size={16}/> Intelligence Backups
-                    </h3>
-                    <div className="space-y-4">
-                      <button onClick={exportRegistryCSV} className="w-full p-6 bg-white/5 border border-white/10 rounded-[32px] hover:bg-white/10 transition-all text-left group">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="p-3 bg-indigo-600 rounded-2xl"><FileType size={20}/></div>
-                            <div>
-                              <p className="text-[11px] font-black uppercase tracking-widest">Export Master Registry</p>
-                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">Full case record dataset (.csv)</p>
-                            </div>
-                          </div>
-                          <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
-                        </div>
-                      </button>
-                      <button onClick={exportTasksCSV} className="w-full p-6 bg-white/5 border border-white/10 rounded-[32px] hover:bg-white/10 transition-all text-left group">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="p-3 bg-indigo-600 rounded-2xl"><ListTodo size={20}/></div>
-                            <div>
-                              <p className="text-[11px] font-black uppercase tracking-widest">Export Tactical Feed</p>
-                              <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">Active directives dataset (.csv)</p>
-                            </div>
-                          </div>
-                          <Download size={18} className="text-slate-500 group-hover:text-white transition-all"/>
-                        </div>
-                      </button>
-                    </div>
-                    <div className="pt-6 border-t border-white/5 flex items-center gap-4 px-2">
-                       <div className="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_12px_rgba(16,185,129,0.6)] animate-pulse"/>
-                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Supabase Cloud Sync: Secured</p>
-                    </div>
-                  </section>
                 </div>
 
                 {/* Activity Code Registry Section */}
